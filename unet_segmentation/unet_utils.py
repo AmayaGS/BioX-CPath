@@ -121,10 +121,9 @@ def slide_loader(image_dir, results_dir, transform, slide_level, patchsize, over
 def create_mask_and_patches(loader, model, batch_size, mean, std, device, path_to_save_mask_and_df, path_to_save_patches, coverage, keep_patches, patient_id_parsing):
 
     filename = path_to_save_mask_and_df + "extracted_patches.csv"
-    fileEmpty = os.stat(filename).st_size == 0
-
 
     with open(filename, "a") as file:
+        fileEmpty = os.stat(filename).st_size == 0
         headers  = ['Patient_ID', 'Filename', 'Patch_name', 'Patch_coordinates', 'File_location']
         writer = csv.DictWriter(file, delimiter=',', lineterminator='\n', fieldnames=headers)
         if fileEmpty:

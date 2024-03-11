@@ -22,7 +22,6 @@ class histoDataset(Dataset):
         self.transform = transform
         self.labels = df[label].astype(int).tolist()
         self.filepaths = df['File_location'].tolist()
-        self.stain = df['Stain'].tolist()
         self.patient_ID = df['Patient_ID'].tolist()
         self.file = df['Filename'].tolist()
         self.patch_name = df['Patch_name'].tolist()
@@ -43,7 +42,6 @@ class histoDataset(Dataset):
             file = self.file[idx]
             patch_name = self.patch_name[idx]
             coordinates = self.coordinates[idx]
-            stain = self.stain[idx]
             self.image_tensor = self.transform(image)
             self.image_label = self.labels[idx]
 

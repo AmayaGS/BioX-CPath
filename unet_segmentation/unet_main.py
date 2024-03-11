@@ -6,6 +6,7 @@ Created on Tue Feb 20 16:27:20 2024
 """
 
 # Misc
+import os
 import argparse
 
 # PIL
@@ -39,7 +40,8 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="Input arguments for unet segmentation and patching of Whole Slide Images")
 
     parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/", help='Input data directory')
-    parser.add_argument('--results_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_patches/", help='Results directory path')
+    parser.add_argument('--patches_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_patches/", help='Results directory path')
+    parser.add_argument('--results_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results/", help='Results directory path')
     parser.add_argument('--path_to_checkpoints', type=str, default=r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar", help='Path to model checkpoints')
     parser.add_argument('--patient_id_parsing', type=str, default='name.split("_")[0]', help='String parsing to obtain patient ID from image filename')
     parser.add_argument('--NUM_WORKERS', type=int, default=0, help='Number of workers (default: 0)')
@@ -63,28 +65,29 @@ def arg_parse():
 def main(args):
 
     # Loading Paths
-    path_to_save_mask_and_df = args.results_directory + "/results/"
+    os.makedirs(args.patches_directory, exist_ok = True)
+    os.makedirs(args.results_directory, exist_ok =True)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(args.mean, args.std)])
 
-    loader = slide_loader(args.input_directory, args.results_directory, transform, args.slide_level, args.patchsize, args.overlap,
+    loader = slide_loader(args.input_directory, args.patches_directory, transform, args.slide_level, args.patchsize, args.overlap,
                                args.slide_batch, args.NUM_WORKERS, args.PIN_MEMORY, args.shuffle)
 
     Model = UNet_512().to(device=DEVICE, dtype=torch.float)
     checkpoint = torch.load(args.path_to_checkpoints, map_location=DEVICE)
     Model.load_state_dict(checkpoint['state_dict'], strict=True)
 
-    create_mask_and_patches(loader, Model, args.batch_size, args.mean, args.std, DEVICE, path_to_save_mask_and_df,
-                            args.results_directory, args.coverage, args.keep_patches, args.patient_id_parsing)
+    create_mask_and_patches(loader, Model, args.batch_size, args.mean, args.std, DEVICE, args.results_directory,
+                            args.patches_directory, args.coverage, args.keep_patches, args.patient_id_parsing)
 
 
 
 if __name__ == "__main__":
     args = arg_parse()
     args.input_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/"
-    args.results_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_patches/"
+    args.results_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results/"
     args.path_to_checkpoints =r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar"
     args.patient_id_parsing = 'name.split("_")[0]',
     args.coverage = 0.3
