@@ -1,5 +1,6 @@
 # KRAG
  KNN + RAG self attention graph for histopathology whole slide imaging
+<<<<<<< HEAD
  
 <ul>
 <li><strong>Segmentation.</strong> A automated segmentation step, where UNet is used to segment tissue areas on the WSIs. The user can use the trained weights provided on our GitHub repository or use their own.</li>
@@ -20,3 +21,5 @@
 
 <li><strong>Heatmap generation.</strong> Sagpool scores.</li>
 </ul>
+=======
+>>>>>>> 9299730 (Initial commit)

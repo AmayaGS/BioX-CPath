@@ -70,7 +70,7 @@ def arg_parse():
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
     parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
+    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'spatial', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
     parser.add_argument("--attention", type=bool, default=False, help="Whether to use an attention pooling mechanism before input into classification fully connected layers")
     parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
@@ -84,7 +84,6 @@ def arg_parse():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
-    parser.add_argument("--l1_norm", type=int, default=0.01, help="L1-norm to regularise loss function")
     parser.add_argument("--checkpoint", action="store_false", default=True, help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
 
     return parser.parse_args()
@@ -101,13 +100,22 @@ def main(args):
     os.makedirs(results, exist_ok = True)
     os.makedirs(checkpoints, exist_ok = True)
 
+
     # load pickled graphs
-    if args.encoding_size == 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+    if args.graph_mode == 'knn':
+        with open(current_directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
-    if args.encoding_size > 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
+    if args.graph_mode == 'spatial':
+        with open(current_directory + f"/spatial_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+            graph_dict = pickle.load(file)
+
+    if args.graph_mode == 'krag' and args.encoding_size == 0:
+        with open(current_directory + f"/homogeneous_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+            graph_dict = pickle.load(file)
+
+    if args.graph_mode == 'krag' and args.encoding_size > 0:
+        with open(current_directory + f"/homogeneous_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
 
@@ -131,10 +139,11 @@ def main(args):
 
     for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
 
+
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
         loss_fn = nn.CrossEntropyLoss()
-        optimizer_ft = optim.AdamW(graph_net.parameters(), lr=args.learning_rate, weight_decay=0.01)
+        optimizer_ft = optim.Adam(graph_net.parameters(), lr=args.learning_rate)
         if use_gpu:
             graph_net.cuda()
 
@@ -144,7 +153,7 @@ def main(args):
         train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
         test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, n_classes=args.n_classes, num_epochs=args.num_epochs, l1_norm=args.l1_norm, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
         # save results to csv file
         mean_best_acc.append(best_acc.item())
@@ -173,13 +182,12 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results\results"
-    args.checkpoint = True
-    args.dataset_name = "R4RA"
+    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2"
+    args.checkpoint = False
+    args.dataset_name = "RA"
     args.embedding_net = 'vgg16'
     args.convolution = 'GAT'
     args.graph_mode = 'krag'
     args.attention = False
-    args.encoding_size = 20
-    args.l1_norm = 0.01
+    args.encoding_size = 0
     main(args)

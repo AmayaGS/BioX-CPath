@@ -38,7 +38,6 @@ gc.enable()
 
 
 
-
 def batch_generator(items, batch_size):
     count = 1
     chunk = []
@@ -137,7 +136,7 @@ def create_mask_and_patches(loader, model, batch_size, mean, std, device, path_t
             for batch_idx, (img_patches, img_indices, label) in enumerate(loop):
 
                 name = label[0] # check here what the parsing will be for your image name
-                patient_id = eval(patient_id_parsing[0])
+                patient_id = eval(patient_id_parsing)
                 num_patches = len(img_patches)
 
                 print(f"Processing WSI: {name}, with {num_patches} patches")

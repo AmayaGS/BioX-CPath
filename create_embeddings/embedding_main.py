@@ -21,7 +21,7 @@ from torchvision import transforms
 
 # KRAG functions
 from loaders import Loaders
-from embedding_net import VGG_embedding, contrastive_resnet18, convNext
+from embedding_net import VGG_embedding, contrastive_resnet18, resnet50_embedding, convNext
 from embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs
 
 # Set environment variables
@@ -39,14 +39,14 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].")
 
     # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC'], help="Dataset name")
+    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC', 'CAMELYON16', 'CAMELYON17'], help="Dataset name")
     parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here.")
     parser.add_argument("--label", type=str, default='Pathotype binary', help="Name of the target label in the metadata file")
     parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
     parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
-    parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
+    parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
     parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
     parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
@@ -90,6 +90,9 @@ def main(args):
     if args.embedding_net == 'resnet18':
         # Load weights for resnet18
         embedding_net = contrastive_resnet18(args.directory + '/tenpercent_resnet18.pt')
+    elif args.embedding_net == 'resnet50':
+        # Load weights for convnext
+        embedding_net = resnet50_embedding()
     elif args.embedding_net == 'vgg16':
         # Load weights for vgg16
         embedding_net = VGG_embedding(embedding_vector_size=args.embedding_vector_size)
@@ -120,14 +123,14 @@ def main(args):
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
 
-
+# %%
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
-    args.label = 'Pathotype binary'
+    args.directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results"
+    args.label = 'label'
     args.patient_id = 'Patient_ID'
-    args.K = 8
-    args.dataset_name = "RA"
+    args.K = 7
+    args.dataset_name = "R4RA"
     args.embedding_net = 'vgg16'
     main(args)

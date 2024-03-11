@@ -46,7 +46,11 @@ class histoDataset(Dataset):
             return self.image_tensor, self.image_label, patient_id, file, patch_name, coordinates
 
         except FileNotFoundError:
-            return None
+            patient_id = self.patient_ID[idx]
+            file = self.file[idx]
+            patch_name = self.patch_name[idx]
+            coordinates = self.coordinates[idx]
+            return []
 
 
 class Loaders:
@@ -60,6 +64,6 @@ class Loaders:
                 new_key = f'{file}'
                 patient_subset = histoDataset(df[df[patient_id] == file], transform, label=label)
     #            if len(train_subset) != 0:
-                patient_subsets[new_key] = torch.utils.data.DataLoader(patient_subset, batch_size=slide_batch, shuffle=shuffle, num_workers=num_workers, drop_last=False, collate_fn=collate)
+                patient_subsets[new_key] = torch.utils.data.DataLoader(patient_subset, batch_size=10, shuffle=shuffle, num_workers=num_workers, drop_last=False, collate_fn=collate)
 
             return patient_subsets

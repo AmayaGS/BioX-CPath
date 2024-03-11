@@ -7,7 +7,7 @@ Created on Mon Nov  6 16:08:28 2023
 
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18, vgg16_bn, VGG16_BN_Weights, convnext_base, ConvNeXt_Base_Weights
+from torchvision.models import resnet18, resnet50, ResNet50_Weights, vgg16_bn, VGG16_BN_Weights, convnext_base, ConvNeXt_Base_Weights
 
 
 
@@ -72,6 +72,22 @@ class contrastive_resnet18(nn.Module):
 
         model = resnet18(weights=None)
         model.load_state_dict(torch.load(MODEL_PATH), strict=True)
+        self.model = model
+
+    def forward(self, x):
+
+        output = self.model(x)
+        output = output.view(output.size()[0], -1)
+        return output
+
+
+class resnet50_embedding(nn.Module):
+
+    def __init__(self):
+
+        super(resnet50_embedding, self).__init__()
+
+        model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
         self.model = model
 
     def forward(self, x):

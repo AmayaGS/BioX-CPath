@@ -17,7 +17,6 @@ from sklearn.preprocessing import label_binarize
 from sklearn.metrics import auc as calc_auc
 
 import torch
-from torch_geometric.data import Data
 
 from auxiliary_functions import Accuracy_Logger
 
@@ -29,35 +28,7 @@ import gc
 gc.enable()
 
 
-def l1_regularization(model, l1_norm):
-    weights = sum(torch.abs(p).sum() for p in model.parameters())
-    return weights * l1_norm
-
-def randomly_shuffle_graph(data, seed=None):
-    # Set the random seed if provided
-    if seed is not None:
-        torch.manual_seed(seed)
-
-    # Randomly shuffle the node features
-    shuffled_features = data.x[torch.randperm(data.num_nodes)]
-    shuffled_rw = data.random_walk_pe[torch.randperm(data.num_nodes)]
-
-    # Randomly shuffle the edge index
-    edge_index = data.edge_index
-    num_edges = edge_index.size(1)
-    shuffled_edge_index = edge_index[:, torch.randperm(num_edges)]
-
-    # Create a new Data object with the shuffled node features and edge index
-    shuffled_data = Data(
-        x= shuffled_features,
-        edge_index= shuffled_edge_index,
-        random_walk_pe= shuffled_rw
-    )
-
-    return shuffled_data
-
-
-def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimizer, n_classes, num_epochs, l1_norm, checkpoint, checkpoint_path="PATH_checkpoints"):
+def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimizer, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
 
 
     since = time.time()
@@ -98,24 +69,19 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             else:
                 data, label = data, label
 
-            shuffled_data = randomly_shuffle_graph(data, seed=42)
-
-            logits, Y_prob = graph_net(shuffled_data)
+            logits, Y_prob = graph_net(data)
 
             Y_hat = Y_prob.argmax(dim=1)
             acc_logger.log(Y_hat, label)
             loss = loss_fn(logits, label)
+            train_loss += loss.item()
 
             train_acc += torch.sum(Y_hat == label.data)
             train_count += 1
 
-            optimizer.zero_grad()
-            l1_loss = l1_regularization(graph_net, l1_norm)
-            reg_loss = loss + l1_loss
-            reg_loss.backward()
+            loss.backward()
             optimizer.step()
-
-            train_loss += reg_loss.item()
+            optimizer.zero_grad()
 
             del data, logits, Y_prob, Y_hat
             gc.collect()
@@ -153,9 +119,7 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             else:
                 data, label = data, label
 
-            shuffled_data = randomly_shuffle_graph(data, seed=42)
-
-            logits, Y_prob = graph_net(shuffled_data)
+            logits, Y_prob = graph_net(data)
             Y_hat = Y_prob.argmax(dim=1)
             val_acc_logger.log(Y_hat, label)
 
@@ -163,9 +127,7 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             val_count += 1
 
             loss = loss_fn(logits, label)
-            l1_loss = l1_regularization(graph_net, l1_norm)
-            reg_loss = loss + l1_loss
-            val_loss += reg_loss.item()
+            val_loss += loss.item()
 
             prob.append(Y_prob.detach().to('cpu').numpy())
             labels.append(label.item())

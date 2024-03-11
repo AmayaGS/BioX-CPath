@@ -48,9 +48,14 @@ def test_graph_multi_wsi(graph_net, test_loader, loss_fn, n_classes=2):
 
     attention_scores= {}
 
-    for batch_idx, (patient_ID, graph_object) in enumerate(test_loader.dataset.items()):
+    for container in test_loader:
 
-        data, label, files, filenames = graph_object
+        data = test_loader.dataset[0]
+        label = test_loader.dataset[1]
+        files = test_loader.dataset[2]
+        filenames = test_loader.dataset[3]
+
+        data, label, files, filenames = container
 
         with torch.no_grad():
             if use_gpu:

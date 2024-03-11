@@ -68,7 +68,7 @@ def arg_parse():
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
     parser.add_argument("--weights", type=str, default="/data/scratch/wpw030/KRAG/", help="Location of trained model weights.")
-
+    parser.add_argument("--fold", type=str, default="0", help="Location of trained model weights.")
     return parser.parse_args()
 
 
@@ -108,21 +108,21 @@ def main(args):
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
         loss_fn = nn.CrossEntropyLoss()
 
-        fold_weight = f"checkpoint_fold_{fold}_{args.dataset_name}.pth"
+        fold_weight = f"checkpoint_fold_{args.fold}_{args.dataset_name}.pth"
         weight_path = os.path.join(weights_directory, fold_weight)
         checkpoint = torch.load(weight_path)
-        graph_net.load_state_dict(checkpoint, strict=True)
+        graph_net.load_state_dict(checkpoint, strict=False)
 
         if use_gpu:
             graph_net.cuda()
 
         test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        test_accuracy, test_auc, prob, conf_matrix, sensitivity, specificity, attention_scores = test_graph_multi_wsi(graph_net, test_graph_loader, loss_fn, n_classes=args.n_classes)
+        test_accuracy, test_auc, conf_matrix, sensitivity, specificity, attention_scores = test_graph_multi_wsi(graph_net, test_graph_loader, loss_fn, n_classes=args.n_classes)
 
         print(test_accuracy, test_auc, sensitivity, specificity, conf_matrix)
 
-        with open(current_directory + f"/attn_score_dict_fold_{fold}_{args.dataset_name}.pkl", "wb") as file:
+        with open(current_directory + f"/attn_score_dict_fold_{args.fold}_{args.dataset_name}.pkl", "wb") as file:
             pickle.dump(attention_scores, file)
 
 
@@ -137,4 +137,6 @@ if __name__ == "__main__":
     args.graph_mode = 'krag'
     args.attention = True
     args.encoding_size = 20
+    args.weights = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2"
+    args.fold = 2
     main(args)
