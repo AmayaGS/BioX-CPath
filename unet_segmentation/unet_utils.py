@@ -27,7 +27,6 @@ from torch.utils.data import Dataset, DataLoader
 from empatches_mod import EMPatches
 emp = EMPatches()
 
-
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.warnings.simplefilter('error', Image.DecompressionBombWarning)

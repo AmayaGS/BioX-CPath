@@ -20,8 +20,8 @@ from empatches_mod import EMPatches
 emp = EMPatches()
 
 # UNET model
-from Models import UNet_512
-from utils import slide_loader, create_mask_and_patches
+from unet_models import UNet_512
+from unet_utils import slide_loader, create_mask_and_patches
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
