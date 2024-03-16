@@ -79,7 +79,7 @@ def main(args):
     df_labels = df.drop_duplicates(subset= args.patient_id)
     ids = list(df_labels[args.patient_id])
 
-    sss_dict_name = f"train_test_strat_splits_{args.dataset_name}.pkl"
+    sss_dict_name = args.directory + f"/train_test_strat_splits_{args.dataset_name}.pkl"
     if not os.path.exists(sss_dict_name):
         # create the dictionary containing the patient ID dictionary of the stratified random splits
         create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.seed, args.dataset_name)
@@ -104,19 +104,19 @@ def main(args):
     embedding_dict, knn_dict, rag_dict, krag_dict = create_embedding_graphs(embedding_net, slides, k=args.K, include_self=True)
     print(f"Done creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}")
 
-    with open(f"embedding_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/embedding_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
         pickle.dump(embedding_dict, file)  # encode dict into Pickle
         print("Done writing embedding_dict into pickle file")
 
-    with open(f"knn_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
         pickle.dump(knn_dict, file)  # encode dict into Pickle
         print("Done writing knn_dict into pickle file")
 
-    with open(f"rag_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/rag_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
         pickle.dump(rag_dict, file)  # encode dict into Pickle
         print("Done writing rag_dict into pickle file")
 
-    with open(f"krag_dict_{args.dataset_name}_{args.embedding_name}.pkl", "wb") as file:
+    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_name}.pkl", "wb") as file:
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
 
@@ -125,7 +125,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\create_embeddings"
+    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
     args.label = 'Pathotype binary'
     args.patient_id = 'Patient_ID'
     args.K = 7
