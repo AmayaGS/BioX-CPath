@@ -100,22 +100,12 @@ def main(args):
     os.makedirs(results, exist_ok = True)
     os.makedirs(checkpoints, exist_ok = True)
 
-
     # load pickled graphs
-    if args.graph_mode == 'knn':
-        with open(current_directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
-            graph_dict = pickle.load(file)
+    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+        graph_dict = pickle.load(file)
 
-    if args.graph_mode == 'spatial':
-        with open(current_directory + f"/spatial_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
-            graph_dict = pickle.load(file)
-
-    if args.graph_mode == 'krag' and args.encoding_size == 0:
-        with open(current_directory + f"/homogeneous_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
-            graph_dict = pickle.load(file)
-
-    if args.graph_mode == 'krag' and args.encoding_size > 0:
-        with open(current_directory + f"/homogeneous_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
+    if args.encoding_size > 0:
+        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
 
@@ -182,7 +172,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2"
+    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
     args.checkpoint = False
     args.dataset_name = "RA"
     args.embedding_net = 'vgg16'
