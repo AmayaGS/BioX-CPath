@@ -9,9 +9,7 @@ Created on Thu Feb  2 16:15:48 2023
 import os, os.path
 from PIL import Image
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-import random
 import torch
-from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 
 

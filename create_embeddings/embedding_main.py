@@ -58,7 +58,6 @@ def arg_parse():
     return parser.parse_args()
 
 
-
 def main(args):
 
     # Set seed
