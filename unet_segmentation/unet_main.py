@@ -39,9 +39,9 @@ def arg_parse():
 
     parser = argparse.ArgumentParser(description="Input arguments for unet segmentation and patching of Whole Slide Images")
 
-    parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/", help='Input data directory')
-    parser.add_argument('--patches_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_patches/", help='Results directory path')
-    parser.add_argument('--results_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results/", help='Results directory path')
+    parser.add_argument('--input_directory', type=str, default= "/slides/", help='Input data directory')
+    parser.add_argument('--patches_directory', type=str, default= "/patches/", help='Results directory path')
+    parser.add_argument('--results_directory', type=str, default= "/data/", help='Results directory path')
     parser.add_argument('--path_to_checkpoints', type=str, default=r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar", help='Path to model checkpoints')
     parser.add_argument('--patient_id_parsing', type=str, default='name.split("_")[0]', help='String parsing to obtain patient ID from image filename')
     parser.add_argument('--NUM_WORKERS', type=int, default=0, help='Number of workers (default: 0)')
@@ -87,7 +87,8 @@ def main(args):
 if __name__ == "__main__":
     args = arg_parse()
     args.input_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/"
-    args.results_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results/"
+    args.patches_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_patches"
+    args.results_directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
     args.path_to_checkpoints =r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar"
     args.patient_id_parsing = 'name.split("_")[0]',
     args.coverage = 0.3

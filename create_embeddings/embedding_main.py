@@ -116,19 +116,18 @@ def main(args):
         pickle.dump(rag_dict, file)  # encode dict into Pickle
         print("Done writing rag_dict into pickle file")
 
-    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_name}.pkl", "wb") as file:
+    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
 
 
-# %%
 
 if __name__ == "__main__":
     args = arg_parse()
     args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
     args.label = 'Pathotype binary'
     args.patient_id = 'Patient_ID'
-    args.K = 7
+    args.K = 8
     args.dataset_name = "RA"
     args.embedding_net = 'vgg16'
     main(args)

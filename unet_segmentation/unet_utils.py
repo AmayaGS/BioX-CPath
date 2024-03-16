@@ -120,7 +120,7 @@ def slide_loader(image_dir, results_dir, transform, slide_level, patchsize, over
 
 def create_mask_and_patches(loader, model, batch_size, mean, std, device, path_to_save_mask_and_df, path_to_save_patches, coverage, keep_patches, patient_id_parsing):
 
-    filename = path_to_save_mask_and_df + "extracted_patches.csv"
+    filename = path_to_save_mask_and_df + "/extracted_patches.csv"
 
     with open(filename, "a") as file:
         fileEmpty = os.stat(filename).st_size == 0
@@ -164,7 +164,7 @@ def create_mask_and_patches(loader, model, batch_size, mean, std, device, path_t
                             if (white_pixels / len(pred_patch_array[patch])**2) > coverage:
 
                                 patch_image = batch[patch].detach().cpu().numpy().transpose(1, 2, 0)
-                                # I added the following 3 lines to fix the problem :ValueError: Floating point image RGB values must be in the 0..1 range.
+
                                 patch_image[:, :, 0] = (patch_image[:, :, 0] * std[0] + mean[0]).clip(0, 1)
                                 patch_image[:, :, 1] = (patch_image[:, :, 1] * std[1] + mean[1]).clip(0, 1)
                                 patch_image[:, :, 2] = (patch_image[:, :, 2] * std[2] + mean[2]).clip(0, 1)
@@ -191,7 +191,7 @@ def create_mask_and_patches(loader, model, batch_size, mean, std, device, path_t
                     gc.collect()
 
                 merged_pre = emp.merge_patches(pred1, img_indices, rgb=False)
-                plt.imsave(os.path.join(path_to_save_mask_and_df, name +".png"), merged_pre)
+                plt.imsave(os.path.join(path_to_save_mask_and_df, "/binary_mask/" + name +".png"), merged_pre)
 
                 del merged_pre, pred1, img_indices, img_patches
                 gc.collect()
