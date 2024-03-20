@@ -48,7 +48,7 @@ def arg_parse():
     parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
     parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
     parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'spatial', 'krag'], help="Change type of graph used for training here")
+    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")

@@ -70,7 +70,7 @@ def arg_parse():
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
     parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'spatial', 'krag'], help="Change type of graph used for training here")
+    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
     parser.add_argument("--attention", type=bool, default=False, help="Whether to use an attention pooling mechanism before input into classification fully connected layers")
     parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
