@@ -82,7 +82,7 @@ class patches_loader(Dataset):
         results_folder_name = os.path.join(self.results_dir, img_name[:-len_file_type])
 
         if not os.path.exists(results_folder_name):
-            objective_power = properties.get('openslide.objective-power', -1)
+            objective_power = properties.get('openslide.objective-power', "-1")
 
             if objective_power == '40': # 40x is the default max magnification
                 image = np.array(slide.read_region((0, 0), self.slide_level, slide.level_dimensions[self.slide_level]).convert('RGB'))
@@ -96,7 +96,7 @@ class patches_loader(Dataset):
                 image = np.array(slide.read_region((0, 0), adjusted_level, slide.level_dimensions[adjusted_level]).convert('RGB'))
             
             elif objective_power == '-1': # Error state
-                image = np.array(slide.read_region((0, 0), self.slide_level, slide.level_dimensions[adjusted_level]).convert('RGB'))
+                image = np.array(slide.read_region((0, 0), self.slide_level, slide.level_dimensions[0]).convert('RGB'))
             
             else:
                 print(f"Slide {img_name} max magnification level is {properties['openslide.objective-power']}")
