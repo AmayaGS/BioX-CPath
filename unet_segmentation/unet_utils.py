@@ -82,18 +82,22 @@ class patches_loader(Dataset):
         results_folder_name = os.path.join(self.results_dir, img_name[:-len_file_type])
 
         if not os.path.exists(results_folder_name):
+            objective_power = properties.get('openslide.objective-power', -1)
 
-            if properties['openslide.objective-power'] == '40': # 40x is the default max magnification
+            if objective_power == '40': # 40x is the default max magnification
                 image = np.array(slide.read_region((0, 0), self.slide_level, slide.level_dimensions[self.slide_level]).convert('RGB'))
 
-            elif properties['openslide.objective-power'] == '20':
+            elif objective_power == '20':
                 adjusted_level = int(self.slide_level + np.log2(int(properties['openslide.objective-power']) / 40)) # if max 20x, adjust level by +1
                 image = np.array(slide.read_region((0, 0), adjusted_level, slide.level_dimensions[adjusted_level]).convert('RGB'))
-
-            elif properties['openslide.objective-power'] == '10':
+            
+            elif objective_power == '10':
                 adjusted_level = int(self.slide_level + np.log2(int(properties['openslide.objective-power']) / 40) * 2) # if max 10x, adjust level by +2
                 image = np.array(slide.read_region((0, 0), adjusted_level, slide.level_dimensions[adjusted_level]).convert('RGB'))
-
+            
+            elif objective_power == '-1': # Error state
+                image = np.array(slide.read_region((0, 0), self.slide_level, slide.level_dimensions[adjusted_level]).convert('RGB'))
+            
             else:
                 print(f"Slide {img_name} max magnification level is {properties['openslide.objective-power']}")
                 image = np.array(slide.read_region((0, 0), 0, slide.level_dimensions[0]).convert('RGB'))
