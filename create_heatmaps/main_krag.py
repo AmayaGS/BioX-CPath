@@ -33,7 +33,7 @@ import torch.optim as optim
 from torch_geometric.loader import DataLoader
 
 # KRAG functions
-from graph_train_loop import train_graph_multi_wsi
+from graph_train_loop import test_graph_multi_wsi
 from auxiliary_functions import seed_everything
 from graph_model import KRAG_Classifier
 
@@ -42,23 +42,6 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 use_gpu = torch.cuda.is_available()
 if use_gpu:
     print("Using CUDA")
-
-
-
-def minority_sampler(train_graph_dict):
-
-    # calculate weights for minority oversampling
-    count = []
-    for k, v in train_graph_dict.items():
-        count.append(v[1].item())
-    counter = Counter(count)
-    class_count = np.array(list(counter.values()))
-    weight = 1 / class_count
-    samples_weight = np.array([weight[t] for t in count])
-    samples_weight = torch.from_numpy(samples_weight)
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), num_samples=len(samples_weight),  replacement=True)
-
-    return sampler
 
 def arg_parse():
 
@@ -84,21 +67,18 @@ def arg_parse():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
-    parser.add_argument("--checkpoint", action="store_false", default=True, help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
+    parser.add_argument("--weights", type=str, default="/data/scratch/wpw030/KRAG/", help="Location of trained model weights.")
 
     return parser.parse_args()
 
 
 def main(args):
 
+
     seed_everything(args.seed)
 
     current_directory = args.directory
-    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}"
-    results = os.path.join(current_directory, "results/" + run_results_folder)
-    checkpoints = results + "/checkpoints"
-    os.makedirs(results, exist_ok = True)
-    os.makedirs(checkpoints, exist_ok = True)
+    weights_directory = args.weights
 
     # load pickled graphs
     if args.encoding_size == 0:
@@ -114,71 +94,47 @@ def main(args):
     with open(current_directory + f"/train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
         sss_folds = pickle.load(splits)
 
-    mean_best_acc = []
-    mean_best_AUC = []
-
-    training_folds = []
+    #training_folds = []
     testing_folds = []
-    for folds, splits in sss_folds.items():
-        for i, (split, patient_ids) in enumerate(splits.items()):
-            if i == 0:
-                train_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-                training_folds.append(train_dict)
-            if i ==1:
-                test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-                testing_folds.append(test_dict)
+    for fold in range(len(sss_folds)):
+        test_ids = sss_folds[f'Fold {fold}']['Test']
+        for patient_ids in test_ids:
+            test_dict = dict(filter(lambda i:i[0] in test_ids, graph_dict.items()))
+            testing_folds.append(test_dict)
 
-    for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
-
+    for test_fold in testing_folds:
 
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
         loss_fn = nn.CrossEntropyLoss()
-        optimizer_ft = optim.Adam(graph_net.parameters(), lr=args.learning_rate)
+
+        fold_weight = f"checkpoint_fold_{fold}_{args.dataset_name}.pth"
+        weight_path = os.path.join(weights_directory, fold_weight)
+        checkpoint = torch.load(weight_path)
+        graph_net.load_state_dict(checkpoint, strict=True)
+
         if use_gpu:
             graph_net.cuda()
 
-        # oversampling of minority class
-        sampler = minority_sampler(train_fold)
-
-        train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
         test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        test_accuracy, test_auc, prob, conf_matrix, sensitivity, specificity, attention_scores = test_graph_multi_wsi(graph_net, test_graph_loader, loss_fn, n_classes=args.n_classes)
 
-        # save results to csv file
-        mean_best_acc.append(best_acc.item())
-        mean_best_AUC.append(best_AUC.item())
+        print(test_accuracy, test_auc, sensitivity, specificity, conf_matrix)
 
-        df_results = pd.DataFrame.from_dict(results_dict)
-        df_results.to_csv(results + "/" + run_results_folder + "_fold_" + str(fold_idx) + ".csv", index=False)
-
-    average_best_acc = sum(mean_best_acc) / len(mean_best_acc)
-    std_best_acc = statistics.pstdev(mean_best_acc)
-    mean_best_acc.append(average_best_acc)
-    mean_best_acc.append(std_best_acc)
-
-    average_best_AUC = sum(mean_best_AUC) / len(mean_best_AUC)
-    std_best_AUC = statistics.pstdev(mean_best_AUC)
-    mean_best_AUC.append(average_best_AUC)
-    mean_best_AUC.append(std_best_AUC)
-
-    summary =[mean_best_acc] + [mean_best_AUC]
-    summary_df = pd.DataFrame(summary, index=['val_accuracy', 'val_AUC']).transpose()
-    summary_df.to_csv(results + "/" + run_results_folder + "_summary_best_scores.csv", index=0)
-
+        with open(current_directory + f"/attn_score_dict_fold_{fold}_{args.dataset_name}.pkl", "wb") as file:
+            pickle.dump(attention_scores, file)
 
 
 # %%
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
-    args.checkpoint = True
+    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2"
     args.dataset_name = "RA"
     args.embedding_net = 'vgg16'
     args.convolution = 'GAT'
     args.graph_mode = 'krag'
-    args.attention = False
-    args.encoding_size = 0
+    args.attention = True
+    args.encoding_size = 20
     main(args)
