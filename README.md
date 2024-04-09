@@ -12,3 +12,32 @@ KNN + RAG self attention graph for histopathology whole slide imaging
 - **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.
 - **Graph classification.** The KRAG is successively passed through four Graph Attention Network layers (GAT) and SAGPooling layers. The SAGPooling readouts from each layer are concatenated and passed through three MLP layers. This concatenated vector is passed through a self-attention head and finally classified.
 - **Heatmap generation.** Sagpool scores.
+
+## Set Up
+
+### General Requirements
+- Python 3.10.10
+- nvidia GPU with CUDA 11.8
+
+### Conda Environment
+```bash
+conda create -n krag python=3.10.10 -y
+conda activate krag
+
+# Open slide
+conda install -y -c conda-forge openslide openslide-python
+
+# PyTorch (Geometric)
+conda install -y pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install -y pyg -c pyg
+
+conda install -y matplotlib
+```
+
+### Pretrained Model Weights
+
+The UNet segmentation weights need downloading
+
+```bash
+wget -c 
+```
