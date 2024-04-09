@@ -72,6 +72,25 @@ def create_stratified_splits(extracted_patches, patient_labels, patient_id, labe
         pickle.dump(fold_dictionary, file)  # encode dict into Pickle
 
 
+def create_non_stratified_split(extracted_patches, patient_labels, patient_id, label, dataset_name):
+
+    # merging patches with the patient labels
+    df = pd.merge(extracted_patches, patient_labels, on=patient_id)
+
+    # drop duplicates to obtain the actual patient IDs that have a label assigned by the pathologist
+    df_labels = df.drop_duplicates(subset=patient_id)
+
+    # creating a dictionary which keeps a list of the Patient IDs from the stratified training splits. Outer key is Fold, inner key is Train/Test.
+    fold_dictionary = {
+        "Fold 0": {
+            "Train": df_labels[df_labels["split"] == "train"][patient_id].tolist(),
+            "Test": df_labels[df_labels["split"] == "test"][patient_id].tolist()
+        }
+    }
+
+    with open(f"train_test_strat_splits_{dataset_name}.pkl", "wb") as file:
+        pickle.dump(fold_dictionary, file)  # encode dict into Pickle
+
 
 def string_to_int_list(s):
     # Remove brackets and split by spaces

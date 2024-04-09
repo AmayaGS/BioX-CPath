@@ -50,7 +50,7 @@ class histoDataset(Dataset):
 
 
 class Loaders:
-
+# TODO: Change this from being in a class - no internal state is required
         def slides_dataloader(self, df, ids, transform, slide_batch, num_workers, shuffle, collate, label='Pathotype_binary', patient_id="Patient_ID"):
 
             # TRAIN dict

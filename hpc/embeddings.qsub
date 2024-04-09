@@ -1,0 +1,20 @@
+#!/bin/bash
+#$ -cwd
+#$ -j y
+#$ -pe smp 8          
+#$ -l h_rt=120:00:0   
+#$ -l h_vmem=11G      
+#$ -l gpu=1           
+#$ -l cluster=andrena
+#$ -m eas
+
+module purge
+
+module load miniconda
+conda activate krag
+python create_embeddings/embedding_main.py --directory "/data/scratch/eey362/KRAG/CAMELYON16/" \
+                                            --label "label" \
+                                            --patient_id "Patient_ID" \
+                                            --K 7 \
+                                            --dataset_name "CAMELYON16" \
+                                            --embedding_net "vgg16"
