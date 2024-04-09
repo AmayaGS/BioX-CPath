@@ -1,0 +1,22 @@
+#!/bin/bash
+#$ -cwd
+#$ -j y
+#$ -pe smp 8          
+#$ -l h_rt=1:00:0   
+#$ -l h_vmem=11G      
+#$ -l gpu=1           
+#$ -l cluster=andrena
+#$ -m eas
+
+module purge
+
+module load miniconda
+conda activate krag
+python train_krag_model/main_krag.py --directory "/data/scratch/eey362/KRAG/CAMELYON16/features/" \
+                                        --checkpoint \
+                                        --dataset_name "CAMELYON16" \
+                                        --embedding_net "vgg16" \
+                                        --convolution "GAT" \
+                                        --graph_mode "krag" \
+                                        --encoding_size 0 \
+                                        --num_epochs 50 \

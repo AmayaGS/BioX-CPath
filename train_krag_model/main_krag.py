@@ -65,16 +65,16 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
 
     # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC'], help="Dataset name")
+    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC', 'CAMELYON16', 'CAMELYON17', 'CAMELYON'], help="Dataset name")
     parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of data dictionaries and results folder. Checkpoints will be kept here as well. Change to required location")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
     parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
     parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
-    parser.add_argument("--attention", type=bool, default=False, help="Whether to use an attention pooling mechanism before input into classification fully connected layers")
+    parser.add_argument("--attention", action="store_true", help="Whether to use an attention pooling mechanism before input into classification fully connected layers")
     parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
-    parser.add_argument("--encoding_size", type=float, default=0, help="Size Random Walk positional encoding")
+    parser.add_argument("--encoding_size", type=int, default=0, help="Size Random Walk positional encoding")
     parser.add_argument("--learning_rate", type=float, default=0.0001, help="Learning rate")
     parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
     parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
@@ -84,7 +84,7 @@ def arg_parse():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
-    parser.add_argument("--checkpoint", action="store_false", default=True, help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
+    parser.add_argument("--checkpoint", action="store_true",help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
 
     return parser.parse_args()
 
@@ -101,16 +101,19 @@ def main(args):
     os.makedirs(checkpoints, exist_ok = True)
 
     # load pickled graphs
-    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
-        graph_dict = pickle.load(file)
-
-    if args.encoding_size > 0:
+    if args.encoding_size == 0:
+        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+            graph_dict = pickle.load(file)
+    else:
         with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
 
     # load stratified random split train/test folds
-    with open(current_directory + f"/train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
+    # with open(current_directory + f"/train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
+    #     sss_folds = pickle.load(splits)
+    # FIXME: embedding_utils.py spits this file out in the repo directory
+    with open(f"train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
         sss_folds = pickle.load(splits)
 
     mean_best_acc = []
@@ -128,8 +131,6 @@ def main(args):
                 testing_folds.append(test_dict)
 
     for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
-
-
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
         loss_fn = nn.CrossEntropyLoss()
@@ -168,16 +169,14 @@ def main(args):
 
 
 
-# %%
-
 if __name__ == "__main__":
     args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
-    args.checkpoint = False
-    args.dataset_name = "RA"
-    args.embedding_net = 'vgg16'
-    args.convolution = 'GAT'
-    args.graph_mode = 'krag'
-    args.attention = False
-    args.encoding_size = 0
+    # args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
+    # args.checkpoint = False
+    # args.dataset_name = "RA"
+    # args.embedding_net = 'vgg16'
+    # args.convolution = 'GAT'
+    # args.graph_mode = 'krag'
+    # args.attention = False
+    # args.encoding_size = 0
     main(args)
