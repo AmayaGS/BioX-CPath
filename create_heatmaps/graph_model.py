@@ -5,13 +5,13 @@ Created on Fri Feb 24 18:22:22 2023
 @author: AmayaGS
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Linear
 from torch_geometric.nn import GATv2Conv, GINConv, GCNConv, SAGEConv
-from torch_geometric.nn import global_mean_pool as gmp, global_max_pool as gmaxp, global_add_pool as gap
-from auxiliary_functions import global_var_pool as gvp
+from torch_geometric.nn import global_mean_pool as gmp, global_max_pool as gmaxp
 from torch_geometric.nn import SAGPooling
 
 
@@ -24,7 +24,7 @@ class KRAG_Classifier(nn.Module):
 
         self.attention =  attention
 
-        self.krag = pooling_network(in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type)
+        self.krag = pooling_network(in_features, hidden_dim, heads, pooling_ratio, walk_length)
 
         if self.attention:
             self.attention_weights = nn.Parameter(torch.Tensor(hidden_dim * 2, hidden_dim * 2))
@@ -34,9 +34,9 @@ class KRAG_Classifier(nn.Module):
         self.lin2 = torch.nn.Linear(hidden_dim, hidden_dim // 2)
         self.lin3 = torch.nn.Linear(hidden_dim // 2, num_classes)
 
-    def forward(self, data):
+    def forward(self, data, filename):
 
-        x = self.krag(data)
+        x, all_patches = self.krag(data, filename)
 
         if self.attention:
             attention_scores = torch.matmul(x, self.attention_weights) # 1* hidden_dim * 2
@@ -51,10 +51,12 @@ class KRAG_Classifier(nn.Module):
         x_logits = self.lin3(x)
         x_out = F.softmax(x_logits, dim=1)
 
-        return x_logits, x_out
+        return x_logits, x_out, all_patches
+
 
 
 class pooling_network(torch.nn.Module):
+
 
     """"""
 
@@ -100,7 +102,7 @@ class pooling_network(torch.nn.Module):
         self.pool4 = SAGPooling(hidden_dim, self.pooling_ratio)
 
 
-    def forward(self, data):
+    def forward(self, data, filenames):
 
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
@@ -109,107 +111,62 @@ class pooling_network(torch.nn.Module):
 
         x = self.conv1(x, edge_index)
         x = F.relu(x)
-        x, edge_index, _, batch, index, _ = self.pool1(x, edge_index, None, batch)
+        x, edge_index, _, batch, perm, score = self.pool1(x, edge_index, None, batch)
         x1 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
 
+        perm_1 = perm
+        score_1 = score
+
         if self.walk_length > 0:
-            rwpe = rwpe[index]
+            rwpe = rwpe[perm]
             x = torch.cat([x, rwpe], dim=1)
+
         x = self.conv2(x, edge_index)
         x = F.relu(x)
-        x, edge_index, _, batch, index, _= self.pool2(x, edge_index, None, batch)
+        x, edge_index, _, batch, perm, score = self.pool2(x, edge_index, None, batch)
         x2 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
 
-        if self.walk_length > 0:
-            rwpe = rwpe[index]
-            x = torch.cat([x, rwpe], dim=1)
-        x = self.conv3(x, edge_index)
-        x = F.relu(x)
-        x, edge_index, _, batch, index, _= self.pool3(x, edge_index, None, batch)
-        x3 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+        perm_2 = perm
+        score_2 = score
+
+        update_scores = lambda idx, scr: scr if idx.item() not in perm_2 else score_2[perm_2.tolist().index(idx.item())]
+        score_updated = torch.stack(list(map(update_scores, perm_1, score_1)))
 
         if self.walk_length > 0:
-            rwpe = rwpe[index]
+            rwpe = rwpe[perm]
             x = torch.cat([x, rwpe], dim=1)
+
+        x = self.conv3(x, edge_index)
+        x = F.relu(x)
+        x, edge_index, _, batch, perm, score = self.pool3(x, edge_index, None, batch)
+        x3 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        perm_3 = perm
+        score_3 = score
+
+        update_scores = lambda idx, scr: scr if idx.item() not in perm_3 else score_3[perm_3.tolist().index(idx.item())]
+        score_updated = torch.stack(list(map(update_scores, perm_1, score_updated)))
+
+        if self.walk_length > 0:
+            rwpe = rwpe[perm]
+            x = torch.cat([x, rwpe], dim=1)
+
         x = self.conv4(x, edge_index)
         x = F.relu(x)
-        x, edge_index, _, batch, index, _= self.pool4(x, edge_index, None, batch)
+        x, edge_index, _, batch, perm, score = self.pool4(x, edge_index, None, batch)
         x4 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        perm_4 = perm
+        score_4 = score
+
+        update_scores = lambda idx, scr: scr if idx.item() not in perm_4 else score_4[perm_4.tolist().index(idx.item())]
+        score_updated = torch.stack(list(map(update_scores, perm_1, score_updated)))
+
+        patches = set(perm_1.tolist())
+        patches_with_attn  = [(filename, score_updated[perm_1.tolist().index(i)].item()) for i, filename in enumerate(filenames) if i in patches]
+        patches_no_attn = [(filename, np.nan) for i, filename in enumerate(filenames) if i not in patches]
+        all_patches = patches_with_attn + patches_no_attn
 
         x = x1 + x2 + x3 + x4
 
-        return x
-
-# class pooling_network(torch.nn.Module):
-
-#     """"""
-
-#     def __init__(self, in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type):
-
-#         super().__init__()
-
-#         self.heads = heads
-#         self.pooling_ratio = pooling_ratio
-#         self.walk_length = walk_length
-
-#         if conv_type == "GAT":
-
-#             self.conv1 = GATv2Conv(in_features + self.walk_length, hidden_dim, heads=self.heads, concat=False)
-#             self.conv2 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-#             self.conv3 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-#             self.conv4 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-
-#         if conv_type == "GCN":
-
-#             self.conv1 = GCNConv(in_features + self.walk_length, hidden_dim)
-#             self.conv2 = GCNConv(hidden_dim, hidden_dim)
-#             self.conv3 = GCNConv(hidden_dim, hidden_dim)
-#             self.conv4 = GCNConv(hidden_dim, hidden_dim)
-
-#         if conv_type == "GraphSAGE":
-
-#             self.conv1 = SAGEConv(in_features + self.walk_length, hidden_dim)
-#             self.conv2 = SAGEConv(hidden_dim, hidden_dim)
-#             self.conv3 = SAGEConv(hidden_dim, hidden_dim)
-#             self.conv4 = SAGEConv(hidden_dim, hidden_dim)
-
-#         if conv_type == "GIN":
-
-#             self.conv1 = GINConv(nn.Sequential(Linear(in_features + self.walk_length, hidden_dim)))
-#             self.conv2 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-#             self.conv3 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-#             self.conv4 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-
-#         self.pool1 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool2 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool3 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool4 = SAGPooling(hidden_dim, self.pooling_ratio)
-
-
-#     def forward(self, data):
-
-#         x, edge_index, batch = data.x, data.edge_index, data.batch
-
-#         x = self.conv1(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, None, batch)
-#         x1 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv2(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool2(x, edge_index, None, batch)
-#         x2 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv3(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool3(x, edge_index, None, batch)
-#         x3 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv4(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool4(x, edge_index, None, batch)
-#         x4 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = x1 + x2 + x3 + x4
-
-#         return x
+        return x, all_patches

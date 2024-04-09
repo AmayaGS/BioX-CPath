@@ -181,5 +181,5 @@ pyrightconfig.json
 *.csv
 *.pt
 *.pkl
-
+*.pth
 checkpoints/

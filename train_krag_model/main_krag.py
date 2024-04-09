@@ -171,12 +171,4 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    # args.directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
-    # args.checkpoint = False
-    # args.dataset_name = "RA"
-    # args.embedding_net = 'vgg16'
-    # args.convolution = 'GAT'
-    # args.graph_mode = 'krag'
-    # args.attention = False
-    # args.encoding_size = 0
     main(args)
