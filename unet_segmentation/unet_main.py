@@ -8,7 +8,6 @@ Created on Tue Feb 20 16:27:20 2024
 # Misc
 import os
 import argparse
-
 # PIL
 from PIL import ImageFile, Image
 
@@ -86,10 +85,10 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.input_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/"
-    args.patches_directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data\patches"
-    args.results_directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
-    args.path_to_checkpoints =r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar"
-    args.patient_id_parsing = 'name.split("_")[0]'
-    args.coverage = 0.3
+    # args.input_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides/"
+    # args.patches_directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data\patches"
+    # args.results_directory = r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\data"
+    # args.path_to_checkpoints =r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar"
+    # args.patient_id_parsing = 'name.split("_")[0]'
+    # args.coverage = 0.3
     main(args)

@@ -1,0 +1,21 @@
+#!/bin/bash
+#$ -cwd
+#$ -j y
+#$ -pe smp 8          
+#$ -l h_rt=100:00:0   
+#$ -l h_vmem=11G      
+#$ -l gpu=1           
+#$ -l cluster=andrena
+#$ -m eas
+
+module purge
+
+module load miniconda
+conda activate krag
+python unet_segmentation/unet_main.py --input_directory "/data/PublicDataSets/CAMELYON/CAMELYON16/images" \
+                                        --patches_directory "/data/scratch/eey362/KRAG/CAMELYON16/patches/" \
+                                        --results_directory "/data/scratch/eey362/KRAG/CAMELYON16/" \
+                                        --path_to_checkpoints "checkpoints/UNet_512_1.pth.tar" \
+                                        --patient_id_parsing "name.split('.')[0]" \
+                                        --coverage 0.3 \
+                                        --slide_level 3 \
