@@ -1,0 +1,19 @@
+#!/bin/bash
+#$ -cwd
+#$ -j y
+#$ -pe smp 8          
+#$ -l h_rt=120:00:0   
+#$ -l h_vmem=11G      
+#$ -l gpu=1           
+#$ -l cluster=andrena
+#$ -m eas
+
+module purge
+
+module load miniconda
+conda activate krag
+python create_rwpe/add_rwpe_to_graph.py --data_directory "/data/scratch/eey362/KRAG/CAMELYON16/" \
+                                        --dataset_name "CAMELYON16" \
+                                        --graph_mode "krag" \
+                                        --positional_encoding \
+                                        --encoding_size 20

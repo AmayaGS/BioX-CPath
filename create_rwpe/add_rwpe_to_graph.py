@@ -40,8 +40,8 @@ def arg_parse():
     parser.add_argument("--data_directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here.")
     parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
     parser.add_argument("--graph_mode", type=str, default="krag", choices=['krag', 'rag', 'knn'], help="type of graph used")
-    parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
-    parser.add_argument("--encoding_size", type=float, default=20, help="Size Random Walk positional encoding")
+    parser.add_argument("--positional_encoding", action="store_true", default=True, help="Add Random Walk positional encoding to the graph")
+    parser.add_argument("--encoding_size", type=int, default=20, help="Size Random Walk positional encoding")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     return parser.parse_args()
@@ -72,7 +72,7 @@ def main(args):
 
     seed_everything(args.seed)
 
-    data_directory = args.data_directory
+    data_directory = os.path.join(args.data_directory, "features")
 
     # load pickled graphs
     with open(data_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
@@ -89,9 +89,9 @@ def main(args):
 
 if __name__ == "__main__":
     args = arg_parse()
-    args.data_directory = r"C:/Users/Amaya/Documents/PhD/MUSTANGv2/min_code_krag/data"
-    args.dataset_name = "RA"
-    args.graph_mode = 'krag'
-    args.positional_encoding = True
-    args.encoding_size = 5
+    # args.data_directory = r"C:/Users/Amaya/Documents/PhD/MUSTANGv2/min_code_krag/data"
+    # args.dataset_name = "RA"
+    # args.graph_mode = 'krag'
+    # args.positional_encoding = True
+    # args.encoding_size = 5
     main(args)
