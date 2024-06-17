@@ -71,6 +71,7 @@ if __name__ == "__main__":
     # General arguments to determine if running preprocessing or training.
     parser.add_argument("--preprocess", type=bool, default=True, action='store_true')
     parser.add_argument("--train", type=bool, default=True, action='store_true')
+    parser.add_argument("--heatmap", type=bool, default=True, action='store_true')
 
     args = parser.parse_args()
 
@@ -88,8 +89,9 @@ if __name__ == "__main__":
         # Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
         train_krag(args)
 
-        # Run heatmap generation for WSI
-        heatmap_generation(args)
+    if args.heatmap:
+            # Run heatmap generation for WSI
+            heatmap_generation(args)
 
 
 
