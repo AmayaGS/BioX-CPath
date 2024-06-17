@@ -21,6 +21,35 @@ def extract_numbers(string):
     numbers = re.findall(pattern, string)
     return [int(num) for num in numbers]
 
+def normalize_attention_scores_per_layer(attention_scores_dict):
+
+    normalized_scores_dict = {}
+
+    for patient, attention_scores_list in attention_scores_dict.items():
+        # Extract all the scores from the four lists
+        scores = []
+        for attention_scores in attention_scores_list:
+            scores.extend([score for _, score in attention_scores])
+
+        # Find the overall minimum and maximum scores
+        min_score = min(scores)
+        max_score = max(scores)
+
+        # Normalize each score using min-max normalization
+        normalized_scores_list = []
+        for attention_scores in attention_scores_list:
+            normalized_scores = []
+            for patch_name, score in attention_scores:
+                if max_score - min_score == 0:
+                    normalized_score = 0.5
+                else:
+                    normalized_score = (score - min_score) / (max_score - min_score) + 0.5
+                normalized_scores.append((patch_name, normalized_score))
+            normalized_scores_list.append(normalized_scores)
+
+        normalized_scores_dict[patient] = normalized_scores_list
+
+    return normalized_scores_dict
 
 def create_heatmaps_per_layer(patient_id, i, attn_score, img_folders, heatmap_path, heatmap_list, path_to_patches, patch_size):
 

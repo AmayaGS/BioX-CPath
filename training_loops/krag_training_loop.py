@@ -6,7 +6,7 @@ Created on Fri Mar  3 17:34:24 2023
 """
 
 import time
-import os, os.path
+import os.path
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import numpy as np
@@ -19,7 +19,7 @@ from sklearn.metrics import auc as calc_auc
 import torch
 from torch_geometric.data import Data
 
-from auxiliary_functions import Accuracy_Logger
+from utils.auxiliary_functions import Accuracy_Logger
 
 use_gpu = torch.cuda.is_available()
 if use_gpu:

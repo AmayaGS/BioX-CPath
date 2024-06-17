@@ -5,8 +5,7 @@ Created on Thu Feb  2 16:15:48 2023
 @author: AmayaGS
 """
 
-
-import os, os.path
+import os.path
 from PIL import Image
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 import torch
