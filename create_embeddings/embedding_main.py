@@ -39,9 +39,9 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].")
 
     # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC', 'CAMELYON16', 'CAMELYON17'], help="Dataset name")
+    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
     parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here.")
-    parser.add_argument("--label", type=str, default='Pathotype binary', help="Name of the target label in the metadata file")
+    parser.add_argument("--label", type=str, default='label', help="Name of the target label in the metadata file")
     parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
     parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
@@ -53,6 +53,8 @@ def arg_parse():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
+    parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining.')
+    parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
 
 
     return parser.parse_args()
@@ -75,21 +77,27 @@ def main(args):
     extracted_patches = pd.read_csv(args.directory + "/extracted_patches.csv")
 
     df = pd.merge(extracted_patches, patient_labels, on= args.patient_id)
-    # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist
-    df_labels = df.drop_duplicates(subset= args.patient_id)
-    ids = list(df_labels[args.patient_id])
+
+    if args.multistain:
+        df = df[df['Stain_type'] == args.stain_type]
+        df_labels = df.drop_duplicates(subset= args.patient_id)
+        ids = list(df_labels[args.patient_id])
+    else:
+      # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist
+        df_labels = df.drop_duplicates(subset= args.patient_id)
+        ids = list(df_labels[args.patient_id])
 
     sss_dict_name = args.directory + f"/train_test_strat_splits_{args.dataset_name}.pkl"
     if not os.path.exists(sss_dict_name):
         # create the dictionary containing the patient ID dictionary of the stratified random splits
-        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.seed, args.dataset_name)
+        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.seed, args.dataset_name, args.directory)
 
     # Create dictionary with patient ID as key and Dataloaders containing the corresponding patches as values.
-    slides = Loaders().slides_dataloader(df, ids, transform, slide_batch= args.slide_batch, num_workers= args.num_workers, shuffle= False, collate= collate_fn_none, label= args.label, patient_id= args.patient_id)
+    slides = Loaders().slides_dataloader(df, ids, transform, slide_batch= args.slide_batch, num_workers= args.num_workers, shuffle= False, collate= collate_fn_none, label= args.label, patient_id= args.patient_id, multistain= args.multistain)
 
     if args.embedding_net == 'resnet18':
         # Load weights for resnet18
-        embedding_net = contrastive_resnet18(args.directory + '/tenpercent_resnet18.pt')
+        embedding_net = contrastive_resnet18('/data/scratch/wpw030/MUSTANGv2_scratch/tenpercent_resnet18.pt')
     elif args.embedding_net == 'resnet50':
         # Load weights for convnext
         embedding_net = resnet50_embedding()
@@ -104,33 +112,36 @@ def main(args):
          embedding_net.cuda()
 
     print(f"Start creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}")
-    embedding_dict, knn_dict, rag_dict, krag_dict = create_embedding_graphs(embedding_net, slides, k=args.K, include_self=True)
+    embedding_dict, knn_dict, rag_dict, krag_dict = create_embedding_graphs(embedding_net, slides, k=args.K, include_self=True, multistain=args.multistain)
     print(f"Done creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}")
 
-    with open(args.directory + f"/embedding_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/embedding_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(embedding_dict, file)  # encode dict into Pickle
         print("Done writing embedding_dict into pickle file")
 
-    with open(args.directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(knn_dict, file)  # encode dict into Pickle
         print("Done writing knn_dict into pickle file")
 
-    with open(args.directory + f"/rag_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/rag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(rag_dict, file)  # encode dict into Pickle
         print("Done writing rag_dict into pickle file")
 
-    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_net}.pkl", "wb") as file:
+    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
 
-# %%
+
 
 if __name__ == "__main__":
-    args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results"
-    args.label = 'label'
-    args.patient_id = 'Patient_ID'
-    args.K = 7
-    args.dataset_name = "R4RA"
-    args.embedding_net = 'vgg16'
-    main(args)
+
+  args = arg_parse()
+  args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
+  args.label = 'label'
+  args.patient_id = 'Patient_ID'
+  args.K = 8
+  args.dataset_name = "CAMELYON16"
+  args.embedding_net = 'resnet18'
+  args.multistain = False
+  args.stain_type = "H&E"
+  main(args)

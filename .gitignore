@@ -11,3 +11,5 @@
 *.iml
 /calculate_variance
 /create_heatmaps
+/unet_segmentation
+/data

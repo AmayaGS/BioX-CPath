@@ -10,8 +10,8 @@ Created on Wed Sep 20 17:14:46 2023
 import os, os.path
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 import numpy as np
-import ast
 import pandas as pd
+import ast
 import random
 import pickle
 
@@ -45,14 +45,9 @@ def collate_fn_none(batch):
     batch = list(filter(lambda x: x is not None, batch))
     return torch.utils.data.dataloader.default_collate(batch)
 
-# def collate_fn_none(batch):
-#     batch = list(filter(lambda x: x is not None, batch))
-#     if len(batch) == 0:
-#         return None
-#     return torch.utils.data.dataloader.default_collate(batch)
 
 
-def create_stratified_splits(extracted_patches, patient_labels, patient_id, label, train_fraction, seed, dataset_name):
+def create_stratified_splits(extracted_patches, patient_labels, patient_id, label, train_fraction, seed, dataset_name, directory):
 
     # merging patches with the patient labels
     df = pd.merge(extracted_patches, patient_labels, on=patient_id)
@@ -74,8 +69,9 @@ def create_stratified_splits(extracted_patches, patient_labels, patient_id, labe
             "Test": list(df_labels.iloc[test_index][patient_id])
         }
 
-    with open(f"train_test_strat_splits_{dataset_name}.pkl", "wb") as file:
+    with open(directory + f"/train_test_strat_splits_{dataset_name}.pkl", "wb") as file:
         pickle.dump(fold_dictionary, file)  # encode dict into Pickle
+
 
 
 # Function to create spatial adjacency matrix
@@ -99,7 +95,7 @@ def create_adjacency_matrix(patches):
 
 
 
-def create_embedding_graphs(embedding_net, loader, k=7, include_self=True):
+def create_embedding_graphs(embedding_net, loader, k=7, include_self=True, multistain=False):
 
 
     embedding_dict = dict()
@@ -114,21 +110,20 @@ def create_embedding_graphs(embedding_net, loader, k=7, include_self=True):
 
             patient_embedding = []
             patient_ids = []
-            folder_ids  = []
+            folder_ids = []
             filenames = []
             coordinates = []
 
             for patch in slide_loader:
 
-                try:
+                if multistain:
+
+                    inputs, label, patient_id, folder_id, file_name, coordinate, stain = patch
+                    stain = stain[0]
+
+                else:
 
                     inputs, label, patient_id, folder_id, file_name, coordinate = patch
-
-                except TypeError:
-
-                    patient_id, folder_id, file_name, coordinate = patch
-                    print(file_name)
-                    continue
 
                 label = label[0].unsqueeze(0)
                 patient_ID = patient_id[0]
@@ -139,7 +134,6 @@ def create_embedding_graphs(embedding_net, loader, k=7, include_self=True):
                     inputs, label = inputs.cuda(), label.cuda()
                 else:
                     inputs, label = inputs, label
-
 
                 embedding = embedding_net(inputs)
                 embedding = embedding.to('cpu')
@@ -156,7 +150,6 @@ def create_embedding_graphs(embedding_net, loader, k=7, include_self=True):
             # Embedding dictionary
             embedding_dict[patient_ID] = [patient_embedding.to('cpu'), label.to('cpu'), list(np.unique(folder_ids)), filenames]
 
-            #if graph_mode == 'rag':
             # Region-adjacency dictionary here
             # this spatial adjacency is on the patient_ID, not the individual image level - hence there can be more than 8 edges. This design choice could be reviewed. Most images from a same patient correspond to slices and therefore align spatially.
             coord = [ast.literal_eval(s) for s in coordinates]
@@ -165,21 +158,20 @@ def create_embedding_graphs(embedding_net, loader, k=7, include_self=True):
             spatial_data = Data(x=patient_embedding, edge_index=spatial_edge_index)
             rag[patient_ID] = [spatial_data.to('cpu'), label.to('cpu'), list(np.unique(folder_ids)), filenames]
 
-            #if graph_mode == 'knn':
             # KNN dictionary here
-            knn_graph = kneighbors_graph(patient_embedding, k, include_self=include_self)
+            num_samples = patient_embedding.shape[0]
+            k_adjusted = min(k, num_samples - 1 if include_self else num_samples)
+            knn_graph = kneighbors_graph(patient_embedding, k_adjusted, include_self=include_self)
             knn_edge_index = torch.tensor(np.array(knn_graph.nonzero()), dtype=torch.long)
             knn_data = Data(x=patient_embedding, edge_index=knn_edge_index)
             knn[patient_ID] = [knn_data.to('cpu'), label.to('cpu'), list(np.unique(folder_ids)), filenames]
 
-            #if graph_mode == 'krag':
             # KNN + KRAG graph dictionary here
-            knn_graph = kneighbors_graph(patient_embedding, k, include_self=include_self)
-            knn_spatial_adj = knn_graph.A  +  spatial_adjacency_matrix
+            knn_spatial_adj = knn_graph.A + spatial_adjacency_matrix
             knn_spatial_adj[np.where(knn_spatial_adj > 1)] = 1
             knn_spatial_edge_index = (torch.tensor(knn_spatial_adj) > 0).nonzero().t()
             knn_spatial_data = Data(x=patient_embedding, edge_index=knn_spatial_edge_index)
             krag[patient_ID] = [knn_spatial_data.to('cpu'), label.to('cpu'), list(np.unique(folder_ids)), filenames]
 
 
-    return embedding_dict, rag, knn, krag
+    return embedding_dict, knn, rag, krag
