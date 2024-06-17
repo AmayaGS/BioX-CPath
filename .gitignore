@@ -4,3 +4,10 @@
 *.pt
 *.pkl
 *.pth
+.idea/deployment.xml
+*.xml
+*.pyc
+*.pyc
+*.iml
+/calculate_variance
+/create_heatmaps
