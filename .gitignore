@@ -10,7 +10,6 @@
 *.pyc
 *.iml
 /calculate_variance
-/create_heatmaps
 /unet_segmentation
 /data
 /data/home/MUSTANGv2/calculate_variance
