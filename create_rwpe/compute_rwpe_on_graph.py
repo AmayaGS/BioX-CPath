@@ -7,7 +7,6 @@ Created on Tue Mar  5 16:29:52 2024
 
 # misc
 import pickle
-import argparse
 
 # pytorch
 import torch
@@ -16,9 +15,7 @@ import torch
 import torch_geometric.transforms as T
 
 # MUSTANG functions
-from auxiliary_functions import seed_everything
-
-#os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+from utils.auxiliary_functions import seed_everything
 
 use_gpu = torch.cuda.is_available()
 if use_gpu:
@@ -26,35 +23,6 @@ if use_gpu:
 
 import gc
 gc.enable()
-
-
-def arg_parse():
-
-    parser = argparse.ArgumentParser(description="self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
-
-    # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", help="Dataset name")
-    parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext'], help="feature extraction network used")
-    parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of data dictionaries and results folder. Checkpoints will be kept here as well. Change to required location")
-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
-    parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
-    parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
-    parser.add_argument("--encoding_size", type=float, default=24, help="Size Random Walk positional encoding")
-    parser.add_argument("--learning_rate", type=float, default=0.0001, help="Learning rate")
-    parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
-    parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
-    parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
-    parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
-    parser.add_argument("--num_epochs", type=int, default=30, help="Number of training epochs")
-    parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
-    parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
-    parser.add_argument("--checkpoint", action="store_false", default=True, help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
-    parser.add_argument("--stains", type=str, default="all", help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
-
-    return parser.parse_args()
-
 
 def add_pe_to_graph(loader, walk_length):
 
@@ -78,42 +46,38 @@ def add_pe_to_graph(loader, walk_length):
 
 
 
-def main(args):
+def compute_rwpe(args):
 
     seed_everything(args.seed)
 
     current_directory = args.directory
 
     # load pickled graphs
-    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stains}.pkl", "rb") as file:
+    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
         graph_dict = pickle.load(file)
-
 
     # adding RWPE here
     graph_dict = add_pe_to_graph(graph_dict, args.encoding_size)
 
-    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stains}.pkl", "wb") as file:
+    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(graph_dict, file)  # encode dict into Pickle
 
-
-
-# %%
-
-if __name__ == "__main__":
-    args = arg_parse()
-    graph_types = ['krag']
-    #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
-    #stains = ['H&E','CD68', 'CD20', 'CD138']
-    stains = ['H&E']
-    #stains = ['all']
-    for graph_type in graph_types:
-        for stain in stains:
-            args.dataset_name = "CAMELYON16"
-            args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
-            args.embedding_net = 'resnet18'
-            args.graph_mode = graph_type
-            args.encoding_size = 20
-            args.stains = stain
-            main(args)
-
-# # %%
+#
+# if __name__ == "__main__":
+#     args = arg_parse()
+#     graph_types = ['krag']
+#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
+#     #stains = ['H&E','CD68', 'CD20', 'CD138']
+#     stains = ['H&E']
+#     #stains = ['all']
+#     for graph_type in graph_types:
+#         for stain in stains:
+#             args.dataset_name = "CAMELYON16"
+#             args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
+#             args.embedding_net = 'resnet18'
+#             args.graph_mode = graph_type
+#             args.encoding_size = 20
+#             args.stains = stain
+#             main(args)
+#
+# # # %%

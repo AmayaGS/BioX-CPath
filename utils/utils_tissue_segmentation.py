@@ -11,7 +11,6 @@ import os
 os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = str(pow(2,40))
 
 import cv2
-import re
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
@@ -24,7 +23,7 @@ import torch
 from torchvision import transforms
 
 # UNET model
-from unet_models import UNet_512
+from models.unet_models import UNet_512
 
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -314,5 +313,3 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
                             batch = []
                             batch_coords = []
                             count = 1
-
-# %%

@@ -10,19 +10,17 @@ Created on Wed Feb 28 19:45:09 2024
 import os
 import pandas as pd
 import pickle
-import argparse
 
 # sklearn
-from sklearn.model_selection import StratifiedShuffleSplit
 
 # PyTorch
 import torch
 from torchvision import transforms
 
 # KRAG functions
-from loaders import Loaders
-from embedding_net import VGG_embedding, contrastive_resnet18, resnet50_embedding, convNext
-from embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs
+from utils.utils_dataloaders import Loaders
+from models.embedding_models import VGG_embedding, contrastive_resnet18, resnet50_embedding, convNext
+from utils.embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs
 
 # Set environment variables
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -33,34 +31,7 @@ if use_gpu:
     print("Using CUDA")
 
 
-
-def arg_parse():
-
-    parser = argparse.ArgumentParser(description="Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].")
-
-    # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
-    parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here.")
-    parser.add_argument("--label", type=str, default='label', help="Name of the target label in the metadata file")
-    parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
-    parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
-    parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
-    parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
-    parser.add_argument("--embedding_net", type=str, default="vgg16", choices=['resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
-    parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
-    parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")
-    parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
-    parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining.')
-    parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
-
-
-    return parser.parse_args()
-
-
-def main(args):
+def patch_embedding(args):
 
     # Set seed
     seed_everything(args.seed)
@@ -132,16 +103,16 @@ def main(args):
         print("Done writing krag_dict into pickle file")
 
 
-
-if __name__ == "__main__":
-
-  args = arg_parse()
-  args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
-  args.label = 'label'
-  args.patient_id = 'Patient_ID'
-  args.K = 8
-  args.dataset_name = "CAMELYON16"
-  args.embedding_net = 'resnet18'
-  args.multistain = False
-  args.stain_type = "H&E"
-  main(args)
+#
+# if __name__ == "__main__":
+#
+#   args = arg_parse()
+#   args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
+#   args.label = 'label'
+#   args.patient_id = 'Patient_ID'
+#   args.K = 8
+#   args.dataset_name = "CAMELYON16"
+#   args.embedding_net = 'resnet18'
+#   args.multistain = False
+#   args.stain_type = "H&E"
+#   main(args)
