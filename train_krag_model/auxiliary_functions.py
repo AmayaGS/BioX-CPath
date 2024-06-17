@@ -11,8 +11,11 @@ import os
 import random
 import numpy as np
 
+from PIL import Image
+
 # PyTorch
 import torch
+from torch.utils.data import Dataset
 from torch import Tensor
 
 # PyG

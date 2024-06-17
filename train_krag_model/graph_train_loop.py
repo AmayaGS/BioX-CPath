@@ -29,9 +29,11 @@ import gc
 gc.enable()
 
 
+
 def l1_regularization(model, l1_norm):
     weights = sum(torch.abs(p).sum() for p in model.parameters())
     return weights * l1_norm
+
 
 def randomly_shuffle_graph(data, seed=None):
     # Set the random seed if provided
@@ -57,7 +59,7 @@ def randomly_shuffle_graph(data, seed=None):
     return shuffled_data
 
 
-def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimizer, n_classes, num_epochs, l1_norm, checkpoint, checkpoint_path="PATH_checkpoints"):
+def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimizer, lr_scheduler, l1_norm, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
 
 
     since = time.time()
@@ -90,6 +92,9 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
         print('-' * 10)
 
         for batch_idx, (patient_ID, graph_object) in enumerate(train_loader.dataset.items()):
+            #print(patient_ID)
+
+            #if patient_ID != "QMUL-R4RA-X990":
 
             data, label, _, _ = graph_object
 
@@ -98,27 +103,45 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             else:
                 data, label = data, label
 
-            shuffled_data = randomly_shuffle_graph(data, seed=42)
+            #shuffled_data = randomly_shuffle_graph(data, seed=42)
+            #logits, Y_prob = graph_net(shuffled_data)
 
-            logits, Y_prob = graph_net(shuffled_data)
+            logits, Y_prob = graph_net(data)
 
             Y_hat = Y_prob.argmax(dim=1)
             acc_logger.log(Y_hat, label)
+
             loss = loss_fn(logits, label)
 
             train_acc += torch.sum(Y_hat == label.data)
             train_count += 1
 
             optimizer.zero_grad()
-            l1_loss = l1_regularization(graph_net, l1_norm)
-            reg_loss = loss + l1_loss
-            reg_loss.backward()
+            loss.backward()
             optimizer.step()
 
-            train_loss += reg_loss.item()
+            train_loss += loss.item()
 
-            del data, logits, Y_prob, Y_hat
+            del data, graph_object, logits, Y_prob, Y_hat
             gc.collect()
+
+            #loss = loss_fn(logits, label)
+
+            #train_acc += torch.sum(Y_hat == label.data)
+            #train_count += 1
+
+            #optimizer.zero_grad()
+            #l1_loss = l1_regularization(graph_net, l1_norm)
+            #reg_loss = loss + l1_loss
+            #reg_loss.backward()
+            #optimizer.step()
+
+            #train_loss += reg_loss.item()
+
+            #del data, graph_object, logits, Y_prob, Y_hat
+            #gc.collect()
+
+        #lr_scheduler.step()
 
         total_loss = train_loss / train_count
         train_accuracy =  train_acc / train_count
@@ -145,6 +168,7 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
         labels = []
 
         for batch_idx, (patient_ID, graph_object) in enumerate(test_loader.dataset.items()):
+            #if patient_ID != "QMUL-R4RA-X990":
 
             data, label, _, _ = graph_object
 
@@ -153,9 +177,10 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             else:
                 data, label = data, label
 
-            shuffled_data = randomly_shuffle_graph(data, seed=42)
+            #shuffled_data = randomly_shuffle_graph(data, seed=42)
+            #logits, Y_prob = graph_net(shuffled_data)
 
-            logits, Y_prob = graph_net(shuffled_data)
+            logits, Y_prob = graph_net(data)
             Y_hat = Y_prob.argmax(dim=1)
             val_acc_logger.log(Y_hat, label)
 
@@ -163,15 +188,24 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             val_count += 1
 
             loss = loss_fn(logits, label)
-            l1_loss = l1_regularization(graph_net, l1_norm)
-            reg_loss = loss + l1_loss
-            val_loss += reg_loss.item()
+            val_loss += loss.item()
 
             prob.append(Y_prob.detach().to('cpu').numpy())
             labels.append(label.item())
 
-            del data, logits, Y_prob, Y_hat
+            del data, graph_object, logits, Y_prob, Y_hat
             gc.collect()
+
+            #loss = loss_fn(logits, label)
+            #l1_loss = l1_regularization(graph_net, l1_norm)
+            #reg_loss = loss + l1_loss
+            #val_loss += reg_loss.item()
+
+            #prob.append(Y_prob.detach().to('cpu').numpy())
+            #labels.append(label.item())
+
+            #del data, graph_object, logits, Y_prob, Y_hat
+            #gc.collect()
 
         val_loss /= val_count
         val_accuracy = val_acc / val_count
@@ -210,8 +244,8 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
             print('Sensitivity: ', sensitivity)
             print('Specificity: ', specificity)
 
-        sensitivity_list.append(sensitivity)
-        specificity_list.append(specificity)
+            sensitivity_list.append(sensitivity)
+            specificity_list.append(specificity)
 
         if val_accuracy >= best_acc:
             best_acc = val_accuracy
@@ -235,14 +269,24 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
     #if checkpoint:
     #    graph_net.load_state_dict(torch.load(checkpoint_weights), strict=True)
 
-    results_dict = {'train_loss': train_loss_list,
-                    'val_loss': val_loss_list,
-                    'train_accuracy': train_accuracy_list,
-                    'val_accuracy': val_accuracy_list,
-                    'val_auc': val_auc_list,
-                    'sensitivity': sensitivity_list,
-                    'specificity': specificity_list
-                    }
+    if n_classes == 2:
+        results_dict = {'train_loss': train_loss_list,
+                        'val_loss': val_loss_list,
+                        'train_accuracy': train_accuracy_list,
+                        'val_accuracy': val_accuracy_list,
+                        'val_auc': val_auc_list,
+                        'sensitivity': sensitivity_list,
+                        'specificity': specificity_list
+                        }
+
+    else:
+        results_dict = {'train_loss': train_loss_list,
+                        'val_loss': val_loss_list,
+                        'train_accuracy': train_accuracy_list,
+                        'val_accuracy': val_accuracy_list,
+                        'val_auc': val_auc_list
+                        }
+
 
     return graph_net, results_dict, best_acc, best_AUC
 

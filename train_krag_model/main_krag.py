@@ -65,7 +65,7 @@ def arg_parse():
     parser = argparse.ArgumentParser(description="self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
 
     # Command line arguments
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'LUAD', 'LSCC'], help="Dataset name")
+    parser.add_argument("--dataset_name", type=str, default="RA", choices=['R4RA', 'NSCLC', 'CAMELYON16', 'Sjogren'], help="Dataset name")
     parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of data dictionaries and results folder. Checkpoints will be kept here as well. Change to required location")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
@@ -75,17 +75,20 @@ def arg_parse():
     parser.add_argument("--attention", type=bool, default=False, help="Whether to use an attention pooling mechanism before input into classification fully connected layers")
     parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
     parser.add_argument("--encoding_size", type=float, default=0, help="Size Random Walk positional encoding")
-    parser.add_argument("--learning_rate", type=float, default=0.0001, help="Learning rate")
+    parser.add_argument("--learning_rate", type=float, default=0.00001, help="Learning rate")
     parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
     parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
     parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
-    parser.add_argument("--num_epochs", type=int, default=30, help="Number of training epochs")
+    parser.add_argument("--num_epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
-    parser.add_argument("--l1_norm", type=int, default=0.01, help="L1-norm to regularise loss function")
+    parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
     parser.add_argument("--checkpoint", action="store_false", default=True, help="Enable checkpointing of GNN weights. Set to False if you don't want to store checkpoints.")
+    parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining.')
+    parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
+    parser.add_argument("--l1_norm", type=int, default=0.00001, help="L1-norm to regularise loss function")
 
     return parser.parse_args()
 
@@ -95,25 +98,32 @@ def main(args):
     seed_everything(args.seed)
 
     current_directory = args.directory
-    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}"
+    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_att_{args.attention}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
     results = os.path.join(current_directory, "results/" + run_results_folder)
     checkpoints = results + "/checkpoints"
     os.makedirs(results, exist_ok = True)
     os.makedirs(checkpoints, exist_ok = True)
 
+
     # load pickled graphs
+
     if args.encoding_size == 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}.pkl", "rb") as file:
+        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
     if args.encoding_size > 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}.pkl", "rb") as file:
+        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
 
     # load stratified random split train/test folds
     with open(current_directory + f"/train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
         sss_folds = pickle.load(splits)
+
+    # load stratified random split train/test folds
+    #with open("/data/DERI-Krag/CAMELYON16/train_test_strat_splits_CAMELYON16.pkl", "rb") as splits:
+    #    sss_folds = pickle.load(splits)
+
 
     mean_best_acc = []
     mean_best_AUC = []
@@ -131,10 +141,12 @@ def main(args):
 
     for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
 
+
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
         loss_fn = nn.CrossEntropyLoss()
         optimizer_ft = optim.AdamW(graph_net.parameters(), lr=args.learning_rate, weight_decay=0.01)
+        lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer_ft, milestones=[25, 50, 75], gamma=0.1)
         if use_gpu:
             graph_net.cuda()
 
@@ -144,7 +156,7 @@ def main(args):
         train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
         test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, n_classes=args.n_classes, num_epochs=args.num_epochs, l1_norm=args.l1_norm, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
         # save results to csv file
         mean_best_acc.append(best_acc.item())
@@ -168,18 +180,35 @@ def main(args):
     summary_df.to_csv(results + "/" + run_results_folder + "_summary_best_scores.csv", index=0)
 
 
-
 # %%
 
 if __name__ == "__main__":
-    args = arg_parse()
-    args.directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results\results"
-    args.checkpoint = True
-    args.dataset_name = "R4RA"
-    args.embedding_net = 'vgg16'
-    args.convolution = 'GAT'
-    args.graph_mode = 'krag'
-    args.attention = False
-    args.encoding_size = 20
-    args.l1_norm = 0.01
-    main(args)
+
+    datasets = ['R4RA', 'Sjogren', 'CAMELYON16', 'NSCLC']
+    graph_types = ['krag']
+    random_seeds = [42]
+    #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
+    #stains = ['H&E', 'CD68', 'CD20', 'CD138']
+    #stains = ['all']
+    stains = ['CD20']
+    for graph_type in graph_types:
+        for stain in stains:
+            for seed in random_seeds:
+                args = arg_parse()
+                args.seed = seed
+                args.directory = "/data/scratch/wpw030/Sjogren_patches/results_1/"
+                args.checkpoint = True
+                args.dataset_name = "Sjogren"
+                args.n_classes = 2
+                args.embedding_net = 'vgg16'
+                args.convolution = 'GAT'
+                args.graph_mode = graph_type
+                args.attention = False
+                args.encoding_size = 20
+                args.learning_rate = 0.00001
+                args.scheduler = 'L2_0.01'
+                args.num_epochs = 150
+                args.multistain = True
+                args.stain_type = stain
+                args.l1_norm = 0.0
+                main(args)

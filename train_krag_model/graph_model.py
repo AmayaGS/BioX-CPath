@@ -11,7 +11,6 @@ import torch.nn.functional as F
 from torch.nn import Linear
 from torch_geometric.nn import GATv2Conv, GINConv, GCNConv, SAGEConv
 from torch_geometric.nn import global_mean_pool as gmp, global_max_pool as gmaxp, global_add_pool as gap
-from auxiliary_functions import global_var_pool as gvp
 from torch_geometric.nn import SAGPooling
 
 
@@ -52,6 +51,81 @@ class KRAG_Classifier(nn.Module):
         x_out = F.softmax(x_logits, dim=1)
 
         return x_logits, x_out
+
+
+class pooling_network_v1(torch.nn.Module):
+
+    """"""
+
+    def __init__(self, in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type):
+
+        super().__init__()
+
+        self.heads = heads
+        self.pooling_ratio = pooling_ratio
+        self.walk_length = walk_length
+
+        if conv_type == "GAT":
+
+            self.conv1 = GATv2Conv(in_features + self.walk_length, hidden_dim, heads=self.heads, concat=False)
+            self.conv2 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
+            self.conv3 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
+            self.conv4 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
+
+        if conv_type == "GCN":
+
+            self.conv1 = GCNConv(in_features + self.walk_length, hidden_dim)
+            self.conv2 = GCNConv(hidden_dim, hidden_dim)
+            self.conv3 = GCNConv(hidden_dim, hidden_dim)
+            self.conv4 = GCNConv(hidden_dim, hidden_dim)
+
+        if conv_type == "GraphSAGE":
+
+            self.conv1 = SAGEConv(in_features + self.walk_length, hidden_dim)
+            self.conv2 = SAGEConv(hidden_dim, hidden_dim)
+            self.conv3 = SAGEConv(hidden_dim, hidden_dim)
+            self.conv4 = SAGEConv(hidden_dim, hidden_dim)
+
+        if conv_type == "GIN":
+
+            self.conv1 = GINConv(nn.Sequential(Linear(in_features + self.walk_length, hidden_dim)))
+            self.conv2 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
+            self.conv3 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
+            self.conv4 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
+
+        self.pool1 = SAGPooling(hidden_dim, self.pooling_ratio)
+        self.pool2 = SAGPooling(hidden_dim, self.pooling_ratio)
+        self.pool3 = SAGPooling(hidden_dim, self.pooling_ratio)
+        self.pool4 = SAGPooling(hidden_dim, self.pooling_ratio)
+
+
+    def forward(self, data):
+
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, None, batch)
+        x1 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        x = self.conv2(x, edge_index)
+        x = F.relu(x)
+        x, edge_index, _, batch, _, _= self.pool2(x, edge_index, None, batch)
+        x2 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        x = self.conv3(x, edge_index)
+        x = F.relu(x)
+        x, edge_index, _, batch, _, _= self.pool3(x, edge_index, None, batch)
+        x3 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        x = self.conv4(x, edge_index)
+        x = F.relu(x)
+        x, edge_index, _, batch, _, _= self.pool4(x, edge_index, None, batch)
+        x4 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
+
+        x = x1 + x2 + x3 + x4
+
+        return x
 
 
 class pooling_network(torch.nn.Module):
@@ -139,77 +213,3 @@ class pooling_network(torch.nn.Module):
         x = x1 + x2 + x3 + x4
 
         return x
-
-# class pooling_network(torch.nn.Module):
-
-#     """"""
-
-#     def __init__(self, in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type):
-
-#         super().__init__()
-
-#         self.heads = heads
-#         self.pooling_ratio = pooling_ratio
-#         self.walk_length = walk_length
-
-#         if conv_type == "GAT":
-
-#             self.conv1 = GATv2Conv(in_features + self.walk_length, hidden_dim, heads=self.heads, concat=False)
-#             self.conv2 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-#             self.conv3 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-#             self.conv4 = GATv2Conv(hidden_dim, hidden_dim, heads=self.heads, concat=False)
-
-#         if conv_type == "GCN":
-
-#             self.conv1 = GCNConv(in_features + self.walk_length, hidden_dim)
-#             self.conv2 = GCNConv(hidden_dim, hidden_dim)
-#             self.conv3 = GCNConv(hidden_dim, hidden_dim)
-#             self.conv4 = GCNConv(hidden_dim, hidden_dim)
-
-#         if conv_type == "GraphSAGE":
-
-#             self.conv1 = SAGEConv(in_features + self.walk_length, hidden_dim)
-#             self.conv2 = SAGEConv(hidden_dim, hidden_dim)
-#             self.conv3 = SAGEConv(hidden_dim, hidden_dim)
-#             self.conv4 = SAGEConv(hidden_dim, hidden_dim)
-
-#         if conv_type == "GIN":
-
-#             self.conv1 = GINConv(nn.Sequential(Linear(in_features + self.walk_length, hidden_dim)))
-#             self.conv2 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-#             self.conv3 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-#             self.conv4 = GINConv(nn.Sequential(Linear(hidden_dim, hidden_dim)))
-
-#         self.pool1 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool2 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool3 = SAGPooling(hidden_dim, self.pooling_ratio)
-#         self.pool4 = SAGPooling(hidden_dim, self.pooling_ratio)
-
-
-#     def forward(self, data):
-
-#         x, edge_index, batch = data.x, data.edge_index, data.batch
-
-#         x = self.conv1(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, None, batch)
-#         x1 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv2(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool2(x, edge_index, None, batch)
-#         x2 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv3(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool3(x, edge_index, None, batch)
-#         x3 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = self.conv4(x, edge_index)
-#         x = F.relu(x)
-#         x, edge_index, _, batch, _, _= self.pool4(x, edge_index, None, batch)
-#         x4 = torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1)
-
-#         x = x1 + x2 + x3 + x4
-
-#         return x
