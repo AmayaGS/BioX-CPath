@@ -6,7 +6,7 @@
 
 KRAG is a self-attention hierarchical graph multiple instance learning pipeline, which combines **local, long-range and global topological** image features for optimal disease identification and subtyping. The pipeline merges **spatial** and feature** space k-nearest neighbours** to create a sparse graph, which undergoes successive self-attention hierarchical GNN and pooling layers, with added **positional encoding**. This enables the model to decide which information is more relevant for a given case, pathology or stain type, with no a priori knowledge of disease spatial presentation
 
-![](\model_schema.png)
+![](model_schema.png)
 
 ### Pipeline
 
