@@ -30,9 +30,6 @@ from models.krag_model import KRAG_Classifier
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
-
 
 def minority_sampler(train_graph_dict):
 
@@ -63,11 +60,11 @@ def train_krag(args):
 
     # load pickled graphs
     if args.encoding_size == 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
+        with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
     if args.encoding_size > 0:
-        with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
+        with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
             graph_dict = pickle.load(file)
 
 

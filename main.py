@@ -13,8 +13,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Input arguments for applying KRAG to Whole Slide Images")
 
     # Input arguments for tissue segmentation and patching of Whole Slide Images
-    parser.add_argument('--input_directory', type=str, default= "/slides/", help='Input data directory')
-    parser.add_argument('--directory', type=str, default= "/output_dir/", help='Results directory path')
+    parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG\TRACTISS_H&E", help='Input data directory')
+    parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
+    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
     parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
     parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
     parser.add_argument('--coverage', type=float, default=0.3, help='Coverage (default: 0.3)')
@@ -23,19 +24,17 @@ if __name__ == "__main__":
     parser.add_argument('--unet', action='store_true', help='Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')
     parser.add_argument('--unet_weights', type=str, default= "/path_to_unet_weights", help='Path to model checkpoints')
     parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size (default: 10)')
-    parser.add_argument('--name_parsing', type=str, default='img_name.split(".")[0]', help='String parsing to obtain patient ID from image filename')
+    parser.add_argument('--name_parsing', type=str, default='img_name.split("_")[0]', help='String parsing to obtain patient ID from image filename')
     parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining. Will generate extracted_patches.csv with stain type info.')
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     #Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].
-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
-    parser.add_argument("--directory", type=str, default="/data/scratch/wpw030/KRAG", help="Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here.Checkpoints will be kept here as well.")
     parser.add_argument("--label", type=str, default='label', help="Name of the target label in the metadata file")
     parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
     parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
     parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
-    parser.add_argument("--embedding_net", type=str, default="resnet18", choices=['resnet18', 'resnet18_ssl', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
+    parser.add_argument("--embedding_net", type=str, default="resnet18", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
     parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
     parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
@@ -69,10 +68,10 @@ if __name__ == "__main__":
     parser.add_argument("--per_layer", action='store_true', help="If called, will create heatmaps for each layer of the GNN.")
 
     # General arguments to determine if running preprocessing or training.
-    parser.add_argument("--preprocess", type=bool, action='store_true', help="Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.")
+    parser.add_argument("--preprocess", action='store_true', help="Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.")
     parser.add_argument("--segmentation", action='store_true', help="Run tissue segmentation of WSI")
     parser.add_argument("--embedding", action='store_true', help="Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
-    parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph"
+    parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph")
     parser.add_argument("--train", action='store_true')
     parser.add_argument("--heatmap", action='store_true', help="Run heatmap generation for WSI, for each layer of the GNN or all together.")
 
@@ -80,36 +79,52 @@ if __name__ == "__main__":
 
     # Run the preprocessing steps together in one go: tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.
     if args.preprocess:
+        print("Running tissue segmentation of WSIs")
         # Run tissue segmentation and patching of Whole Slide Images
         tissue_segmentation(args)
+        print("Done running tissue segmentation of WSIs")
 
+        print("Running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
         # Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]
         patch_embedding(args)
+        print("Done running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
 
+        print("Running pre-compute of Random Walk positional encoding on the graph")
         # Run pre-compute of Random Walk positional encoding on the graph
         compute_rwpe(args)
+        print("Done running pre-compute of Random Walk positional encoding on the graph")
 
     # Run the preprocessing steps individually if needed
     if args.segmentation:
         # Run tissue segmentation of WSI
+        print("Running tissue segmentation of WSIs")
         tissue_segmentation(args)
+        print("Done running tissue segmentation of WSIs")
 
     if args.embedding:
+        print("Running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
         # Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]
         patch_embedding(args)
+        print("Done running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
 
     if args.compute_rwpe:
+        print("Running pre-compute of Random Walk positional encoding on the graph")
         # Run pre-compute of Random Walk positional encoding on the graph
         compute_rwpe(args)
+        printt("Done running pre-compute of Random Walk positional encoding on the graph")
 
     # Run training of the self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
     if args.train:
+        print("Start training")
         # Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
         train_krag(args)
+        print("Done training")
 
     if args.heatmap:
+            print("Running heatmap generation for WSI")
             # Run heatmap generation for WSI
             heatmap_generation(args)
+            print("Done generating heatmaps for WSIs")
 
 
 

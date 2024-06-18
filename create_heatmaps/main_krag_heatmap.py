@@ -29,8 +29,6 @@ from utils.utils_heatmap_generation import create_heatmaps, create_heatmaps_per_
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
 
 
 def heatmap_generation(args):
@@ -106,25 +104,23 @@ def heatmap_generation(args):
     df_results = pd.DataFrame(results, columns=['Patient_ID', 'Label', 'Predicted_label'])
     df_results.to_csv(current_directory + f"/predicted_results_{args.graph_mode}_{args.test_fold}_{args.dataset_name}.csv", index=False)
 
-
-# %%
-
-if __name__ == "__main__":
-
-    graph_modes = ['krag']
-    for graph in graph_modes:
-        args = arg_parse()
-        args.directory = "/data/scratch/wpw030/CAMELYON16/feature_dictionaries/"
-        args.path_to_patches = "/data/scratch/wpw030/CAMELYON16/results_10/patches/"
-        args.checkpoint_weights = "/data/scratch/wpw030/CAMELYON16/krag_test_checkpoints/"
-        args.heatmap_path = "/data/scratch/wpw030/CAMELYON16/heatmaps_per_layer/"
-        args.dataset_name = "CAMELYON16"
-        args.embedding_net = 'resnet18'
-        args.convolution = 'GAT'
-        args.graph_mode = graph
-        args.attention = False
-        args.encoding_size = 20
-        args.stain_type = 'H&E'
-        args.test_fold = "Fold 0"
-        args.test_ids = ['test_016', 'test_071', 'test_102']
-        main(args)
+#
+# if __name__ == "__main__":
+#
+#     graph_modes = ['krag']
+#     for graph in graph_modes:
+#         args = arg_parse()
+#         args.directory = "/data/scratch/wpw030/CAMELYON16/feature_dictionaries/"
+#         args.path_to_patches = "/data/scratch/wpw030/CAMELYON16/results_10/patches/"
+#         args.checkpoint_weights = "/data/scratch/wpw030/CAMELYON16/krag_test_checkpoints/"
+#         args.heatmap_path = "/data/scratch/wpw030/CAMELYON16/heatmaps_per_layer/"
+#         args.dataset_name = "CAMELYON16"
+#         args.embedding_net = 'resnet18'
+#         args.convolution = 'GAT'
+#         args.graph_mode = graph
+#         args.attention = False
+#         args.encoding_size = 20
+#         args.stain_type = 'H&E'
+#         args.test_fold = "Fold 0"
+#         args.test_ids = ['test_016', 'test_071', 'test_102']
+#         main(args)

@@ -18,8 +18,6 @@ import torch_geometric.transforms as T
 from utils.auxiliary_functions import seed_everything
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
 
 import gc
 gc.enable()
@@ -53,13 +51,13 @@ def compute_rwpe(args):
     current_directory = args.directory
 
     # load pickled graphs
-    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
+    with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
         graph_dict = pickle.load(file)
 
     # adding RWPE here
     graph_dict = add_pe_to_graph(graph_dict, args.encoding_size)
 
-    with open(current_directory + f"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+    with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(graph_dict, file)  # encode dict into Pickle
 
 #

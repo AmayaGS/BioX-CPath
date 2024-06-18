@@ -19,7 +19,7 @@ from torchvision import transforms
 
 # KRAG functions
 from utils.utils_dataloaders import Loaders
-from models.embedding_models import VGG_embedding, contrastive_resnet18, resnet50_embedding, convNext
+from models.embedding_models import VGG_embedding, resnet18_embedding, contrastive_resnet18, resnet50_embedding, convNext
 from utils.embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs
 
 # Set environment variables
@@ -27,9 +27,6 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 # Check for GPU availability
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
-
 
 def patch_embedding(args):
 
@@ -45,7 +42,7 @@ def patch_embedding(args):
     # Load df with patient_id and corresponding labels here, to merge with extracted patches.
     patient_labels = pd.read_csv(args.directory + "/patient_labels.csv")
     # Load file with all extracted patches metadata and locations.
-    extracted_patches = pd.read_csv(args.directory + "/extracted_patches.csv")
+    extracted_patches = pd.read_csv(args.directory + "/results_" + str(args.slide_level) + "/extracted_patches.csv")
 
     df = pd.merge(extracted_patches, patient_labels, on= args.patient_id)
 
@@ -68,6 +65,9 @@ def patch_embedding(args):
 
     if args.embedding_net == 'resnet18':
         # Load weights for resnet18
+        embedding_net = resnet18_embedding()
+    if args.embedding_net == 'ssl_resnet18':
+        # Load weights for resnet18
         embedding_net = contrastive_resnet18('/data/scratch/wpw030/MUSTANGv2_scratch/tenpercent_resnet18.pt')
     elif args.embedding_net == 'resnet50':
         # Load weights for convnext
@@ -86,19 +86,22 @@ def patch_embedding(args):
     embedding_dict, knn_dict, rag_dict, krag_dict = create_embedding_graphs(embedding_net, slides, k=args.K, include_self=True, multistain=args.multistain)
     print(f"Done creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}")
 
-    with open(args.directory + f"/embedding_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+    dictionaries = os.path.join(args.directory, "dictionaries")
+    os.makedirs(dictionaries, exist_ok = True)
+
+    with open(dictionaries + f"/embedding_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(embedding_dict, file)  # encode dict into Pickle
         print("Done writing embedding_dict into pickle file")
 
-    with open(args.directory + f"/knn_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+    with open(dictionaries + f"/knn_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(knn_dict, file)  # encode dict into Pickle
         print("Done writing knn_dict into pickle file")
 
-    with open(args.directory + f"/rag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+    with open(dictionaries + f"/rag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(rag_dict, file)  # encode dict into Pickle
         print("Done writing rag_dict into pickle file")
 
-    with open(args.directory + f"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+    with open(dictionaries + f"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
 
