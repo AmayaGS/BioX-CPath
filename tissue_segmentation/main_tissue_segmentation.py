@@ -17,7 +17,7 @@ def tissue_segmentation(args):
     os.makedirs(args.directory, exist_ok =True)
 
     save_patches(image_dir= args.input_directory,
-                 output_dir= args.ouput_directory,
+                 output_dir= args.directory,
                  slide_level= args.slide_level,
                  mask_level= args.mask_level,
                  patch_size= args.patch_size,

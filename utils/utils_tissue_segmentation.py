@@ -25,8 +25,10 @@ from torchvision import transforms
 # UNET model
 from models.unet_models import UNet_512
 
-
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+if DEVICE == torch.device('cuda'):
+    print("Using CUDA")
+
 
 mean = [0.8946, 0.8659, 0.8638]
 std = [0.1050, 0.1188, 0.1180]
@@ -212,7 +214,7 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
             file_type = img.split(".")[-1]
             len_file_type = len(file_type) + 1
             img_name = img[:-len_file_type]
-            patient_id = eval(name_parsing)[0]
+            patient_id = eval(name_parsing)
             if multistain:
                 stain_type =  eval(name_parsing)[1]
             mask_name = img_name + ".png"

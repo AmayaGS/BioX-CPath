@@ -18,11 +18,9 @@ from sklearn.metrics import auc as calc_auc
 
 import torch
 
-from auxiliary_functions import Accuracy_Logger
+from utils.auxiliary_functions import Accuracy_Logger
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
 
 import gc
 gc.enable()

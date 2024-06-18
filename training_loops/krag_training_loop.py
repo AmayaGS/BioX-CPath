@@ -22,8 +22,6 @@ from torch_geometric.data import Data
 from utils.auxiliary_functions import Accuracy_Logger
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
 
 import gc
 gc.enable()

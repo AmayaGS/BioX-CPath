@@ -24,10 +24,6 @@ import torch
 from torch_geometric.data import Data
 
 use_gpu = torch.cuda.is_available()
-if use_gpu:
-    print("Using CUDA")
-
-
 
 def seed_everything(seed=42):
     random.seed(seed)
