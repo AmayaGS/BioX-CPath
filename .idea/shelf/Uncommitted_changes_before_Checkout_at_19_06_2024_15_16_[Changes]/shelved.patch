@@ -1,0 +1,412 @@
+Index: main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>\r\n\r\nimport argparse\r\n\r\nfrom tissue_segmentation.main_tissue_segmentation import tissue_segmentation\r\nfrom create_embeddings.embedding_main import patch_embedding\r\nfrom create_rwpe.compute_rwpe_on_graph import compute_rwpe\r\nfrom train_krag_model.main_krag import train_krag\r\nfrom create_heatmaps.main_krag_heatmap import heatmap_generation\r\n\r\nif __name__ == \"__main__\":\r\n\r\n    parser = argparse.ArgumentParser(description=\"Input arguments for applying KRAG to Whole Slide Images\")\r\n\r\n    # Input arguments for tissue segmentation and patching of Whole Slide Images\r\n    parser.add_argument('--input_directory', type=str, default= r\"C:\\Users\\Amaya\\Documents\\PhD\\Data\\Test_data_KRAG\\TRACTISS_H&E\", help='Input data directory')\r\n    parser.add_argument('--directory', type=str, default= r\"C:\\Users\\Amaya\\Documents\\PhD\\Data\\Test_data_KRAG\", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')\r\n    parser.add_argument(\"--dataset_name\", type=str, default=\"RA\", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help=\"Dataset name\")\r\n    parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')\r\n    parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')\r\n    parser.add_argument('--coverage', type=float, default=0.3, help='Coverage (default: 0.3)')\r\n    parser.add_argument('--slide_level', type=int, default=2, help='Slide level (default: 2)')\r\n    parser.add_argument('--mask_level', type=int, default=3, help='Slide level (default: 3)')\r\n    parser.add_argument('--unet', action='store_true', help='Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')\r\n    parser.add_argument('--unet_weights', type=str, default= \"/path_to_unet_weights\", help='Path to model checkpoints')\r\n    parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size (default: 10)')\r\n    parser.add_argument('--name_parsing', type=str, default='img_name.split(\"_\")[0]', help='String parsing to obtain patient ID from image filename')\r\n    parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining. Will generate extracted_patches.csv with stain type info.')\r\n    parser.add_argument(\"--seed\", type=int, default=42, help=\"Random seed\")\r\n\r\n    #Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].\r\n    parser.add_argument(\"--label\", type=str, default='label', help=\"Name of the target label in the metadata file\")\r\n    parser.add_argument(\"--patient_id\", type=str, default='Patient_ID', help=\"Name of column containing the patient ID\")\r\n    parser.add_argument(\"--K\", type=int, default=7, help=\"Number of nearest neighbours in k-NNG created from WSI embeddings\")\r\n    parser.add_argument(\"--embedding_vector_size\", type=int, default=1000, help=\"Embedding vector size\")\r\n    parser.add_argument(\"--stratified_splits\", type=int, default=10, help=\"Number of random stratified splits\")\r\n    parser.add_argument(\"--embedding_net\", type=str, default=\"resnet18\", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50'], help=\"feature extraction network used\")\r\n    parser.add_argument(\"--train_fraction\", type=float, default=0.7, help=\"Train fraction\")\r\n    parser.add_argument(\"--graph_mode\", type=str, default=\"krag\", choices=['knn', 'rag', 'krag'], help=\"Change type of graph used for training here\")\r\n    parser.add_argument(\"--n_classes\", type=int, default=2, help=\"Number of classes\")\r\n    parser.add_argument(\"--slide_batch\", type=int, default=1, help=\"Slide batch size - default 1\")\r\n    parser.add_argument(\"--num_workers\", type=int, default=0, help=\"Number of workers for data loading\")\r\n    parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')\r\n\r\n    #pre-compute Random Walk positional encoding on the graph\r\n    parser.add_argument(\"--encoding_size\", type=int, default=20, help=\"Size Random Walk positional encoding\")\r\n\r\n    #self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level\"\r\n    parser.add_argument(\"--hidden_dim\", type=int, default=512, help=\"Size of hidden network dimension\")\r\n    parser.add_argument(\"--convolution\", type=str, default=\"GAT\", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help=\"Change type of graph convolution used\")\r\n    parser.add_argument(\"--positional_encoding\", default=True, help=\"Add Random Walk positional encoding to the graph\")\r\n    parser.add_argument(\"--learning_rate\", type=float, default=0.00001, help=\"Learning rate\")\r\n    parser.add_argument(\"--pooling_ratio\", type=float, default=0.7, help=\"Pooling ratio\")\r\n    parser.add_argument(\"--heads\", type=int, default=2, help=\"Number of GAT heads\")\r\n    parser.add_argument(\"--num_epochs\", type=int, default=50, help=\"Number of training epochs\")\r\n    parser.add_argument(\"--batch_size\", type=int, default=1, help=\"Graph batch size for training\")\r\n    parser.add_argument(\"--scheduler\", type=str, default=1, help=\"learning rate schedule\")\r\n    parser.add_argument(\"--checkpoint\", action=\"store_true\", default=True, help=\"Enables checkpointing of GNN weights.\")\r\n    parser.add_argument(\"--l1_norm\", type=int, default=0.00001, help=\"L1-norm to regularise loss function\")\r\n\r\n    # heatmap generation for WSI\r\n    parser.add_argument(\"--path_to_patches\", type=str, default=\"/data/scratch/wpw030/KRAG/results/patches/\", help=\"Location of patches\")\r\n    parser.add_argument(\"--heatmap_path\", type=str, default=\"/data/scratch/wpw030/KRAG/results/heatmaps/\", help=\"Location of saved heatmap figs\")\r\n    parser.add_argument(\"--checkpoint_weights\", type=str, default=\"/data/scratch/wpw030/KRAG/\", help=\"Location of trained model weights.\")\r\n    parser.add_argument(\"--test_fold\", type=str, default=\"Fold_9\", help=\"test fold\")\r\n    parser.add_argument(\"--test_ids\", action='store_true', help=\"Specific IDs to create heatmap on, rather than test fold.\")\r\n    parser.add_argument(\"--slide_name\", type=str, default=\"/data/scratch/wpw030/KRAG/slide1\", help=\"Location of slide which to create heatmap for.\")\r\n    parser.add_argument(\"--per_layer\", action='store_true', help=\"If called, will create heatmaps for each layer of the GNN.\")\r\n\r\n    # General arguments to determine if running preprocessing or training.\r\n    parser.add_argument(\"--preprocess\", action='store_true', help=\"Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.\")\r\n    parser.add_argument(\"--segmentation\", action='store_true', help=\"Run tissue segmentation of WSI\")\r\n    parser.add_argument(\"--embedding\", action='store_true', help=\"Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\")\r\n    parser.add_argument(\"--compute_rwpe\", action='store_true', help=\"Run pre-compute of Random Walk positional encoding on the graph\")\r\n    parser.add_argument(\"--train\", action='store_true')\r\n    parser.add_argument(\"--heatmap\", action='store_true', help=\"Run heatmap generation for WSI, for each layer of the GNN or all together.\")\r\n\r\n    args = parser.parse_args()\r\n\r\n    # Run the preprocessing steps together in one go: tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.\r\n    if args.preprocess:\r\n        print(\"Running tissue segmentation of WSIs\")\r\n        # Run tissue segmentation and patching of Whole Slide Images\r\n        tissue_segmentation(args)\r\n        print(\"Done running tissue segmentation of WSIs\")\r\n\r\n        print(\"Running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\")\r\n        # Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\r\n        patch_embedding(args)\r\n        print(\"Done running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\")\r\n\r\n        print(\"Running pre-compute of Random Walk positional encoding on the graph\")\r\n        # Run pre-compute of Random Walk positional encoding on the graph\r\n        compute_rwpe(args)\r\n        print(\"Done running pre-compute of Random Walk positional encoding on the graph\")\r\n\r\n    # Run the preprocessing steps individually if needed\r\n    if args.segmentation:\r\n        # Run tissue segmentation of WSI\r\n        print(\"Running tissue segmentation of WSIs\")\r\n        tissue_segmentation(args)\r\n        print(\"Done running tissue segmentation of WSIs\")\r\n\r\n    if args.embedding:\r\n        print(\"Running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\")\r\n        # Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\r\n        patch_embedding(args)\r\n        print(\"Done running feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]\")\r\n\r\n    if args.compute_rwpe:\r\n        print(\"Running pre-compute of Random Walk positional encoding on the graph\")\r\n        # Run pre-compute of Random Walk positional encoding on the graph\r\n        compute_rwpe(args)\r\n        printt(\"Done running pre-compute of Random Walk positional encoding on the graph\")\r\n\r\n    # Run training of the self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level\r\n    if args.train:\r\n        print(\"Start training\")\r\n        # Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level\r\n        train_krag(args)\r\n        print(\"Done training\")\r\n\r\n    if args.heatmap:\r\n            print(\"Running heatmap generation for WSI\")\r\n            # Run heatmap generation for WSI\r\n            heatmap_generation(args)\r\n            print(\"Done generating heatmaps for WSIs\")\r\n\r\n\r\n\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/main.py b/main.py
+--- a/main.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/main.py	(date 1718806500886)
+@@ -1,6 +1,7 @@
+ 
+ 
+-import argparse
++import yaml
++import types
+ 
+ from tissue_segmentation.main_tissue_segmentation import tissue_segmentation
+ from create_embeddings.embedding_main import patch_embedding
+@@ -8,74 +9,16 @@
+ from train_krag_model.main_krag import train_krag
+ from create_heatmaps.main_krag_heatmap import heatmap_generation
+ 
++
++
+ if __name__ == "__main__":
+ 
+-    parser = argparse.ArgumentParser(description="Input arguments for applying KRAG to Whole Slide Images")
+-
+-    # Input arguments for tissue segmentation and patching of Whole Slide Images
+-    parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG\TRACTISS_H&E", help='Input data directory')
+-    parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
+-    parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
+-    parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
+-    parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
+-    parser.add_argument('--coverage', type=float, default=0.3, help='Coverage (default: 0.3)')
+-    parser.add_argument('--slide_level', type=int, default=2, help='Slide level (default: 2)')
+-    parser.add_argument('--mask_level', type=int, default=3, help='Slide level (default: 3)')
+-    parser.add_argument('--unet', action='store_true', help='Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')
+-    parser.add_argument('--unet_weights', type=str, default= "/path_to_unet_weights", help='Path to model checkpoints')
+-    parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size (default: 10)')
+-    parser.add_argument('--name_parsing', type=str, default='img_name.split("_")[0]', help='String parsing to obtain patient ID from image filename')
+-    parser.add_argument('--multistain', type=bool, default=False, help='Whether the dataset contains multiple types of staining. Will generate extracted_patches.csv with stain type info.')
+-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+-
+-    #Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].
+-    parser.add_argument("--label", type=str, default='label', help="Name of the target label in the metadata file")
+-    parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
+-    parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
+-    parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
+-    parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
+-    parser.add_argument("--embedding_net", type=str, default="resnet18", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
+-    parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
+-    parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
+-    parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
+-    parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")
+-    parser.add_argument("--num_workers", type=int, default=0, help="Number of workers for data loading")
+-    parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
+-
+-    #pre-compute Random Walk positional encoding on the graph
+-    parser.add_argument("--encoding_size", type=int, default=20, help="Size Random Walk positional encoding")
+-
+-    #self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level"
+-    parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
+-    parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
+-    parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
+-    parser.add_argument("--learning_rate", type=float, default=0.00001, help="Learning rate")
+-    parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
+-    parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
+-    parser.add_argument("--num_epochs", type=int, default=50, help="Number of training epochs")
+-    parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
+-    parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
+-    parser.add_argument("--checkpoint", action="store_true", default=True, help="Enables checkpointing of GNN weights.")
+-    parser.add_argument("--l1_norm", type=int, default=0.00001, help="L1-norm to regularise loss function")
++    # Load the YAML configuration file
++    with open("config_file.yml", "r") as file:
++        config_data = yaml.safe_load(file)
+ 
+-    # heatmap generation for WSI
+-    parser.add_argument("--path_to_patches", type=str, default="/data/scratch/wpw030/KRAG/results/patches/", help="Location of patches")
+-    parser.add_argument("--heatmap_path", type=str, default="/data/scratch/wpw030/KRAG/results/heatmaps/", help="Location of saved heatmap figs")
+-    parser.add_argument("--checkpoint_weights", type=str, default="/data/scratch/wpw030/KRAG/", help="Location of trained model weights.")
+-    parser.add_argument("--test_fold", type=str, default="Fold_9", help="test fold")
+-    parser.add_argument("--test_ids", action='store_true', help="Specific IDs to create heatmap on, rather than test fold.")
+-    parser.add_argument("--slide_name", type=str, default="/data/scratch/wpw030/KRAG/slide1", help="Location of slide which to create heatmap for.")
+-    parser.add_argument("--per_layer", action='store_true', help="If called, will create heatmaps for each layer of the GNN.")
+-
+-    # General arguments to determine if running preprocessing or training.
+-    parser.add_argument("--preprocess", action='store_true', help="Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.")
+-    parser.add_argument("--segmentation", action='store_true', help="Run tissue segmentation of WSI")
+-    parser.add_argument("--embedding", action='store_true', help="Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
+-    parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph")
+-    parser.add_argument("--train", action='store_true')
+-    parser.add_argument("--heatmap", action='store_true', help="Run heatmap generation for WSI, for each layer of the GNN or all together.")
+-
+-    args = parser.parse_args()
++    # Create a namespace object from the configuration data
++    args = types.SimpleNamespace(**config_data)
+ 
+     # Run the preprocessing steps together in one go: tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.
+     if args.preprocess:
+@@ -111,7 +54,7 @@
+         print("Running pre-compute of Random Walk positional encoding on the graph")
+         # Run pre-compute of Random Walk positional encoding on the graph
+         compute_rwpe(args)
+-        printt("Done running pre-compute of Random Walk positional encoding on the graph")
++        print("Done running pre-compute of Random Walk positional encoding on the graph")
+ 
+     # Run training of the self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
+     if args.train:
+@@ -121,10 +64,10 @@
+         print("Done training")
+ 
+     if args.heatmap:
+-            print("Running heatmap generation for WSI")
+-            # Run heatmap generation for WSI
+-            heatmap_generation(args)
+-            print("Done generating heatmaps for WSIs")
++        print("Running heatmap generation for WSI")
++        # Run heatmap generation for WSI
++        heatmap_generation(args)
++        print("Done generating heatmaps for WSIs")
+ 
+ 
+ 
+Index: README.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># KRAG\r\n\r\n**Extracting complex disease signatures using graphs for  classification of heterogeneous Whole Slide Images**\r\n\r\n## Overview \r\n\r\nKRAG is a self-attention hierarchical graph multiple instance learning pipeline, which combines **local, long-range and global topological** image features for optimal disease identification and subtyping. The pipeline merges **spatial** and feature** space k-nearest neighbours** to create a sparse graph, which undergoes successive self-attention hierarchical GNN and pooling layers, with added **positional encoding**. This enables the model to decide which information is more relevant for a given case, pathology or stain type, with no a priori knowledge of disease spatial presentation\r\n\r\n![](model_schema.png)\r\n\r\n### Pipeline\r\n\r\n- **Segmentation.** A automated tissue segmentation step, using adaptive thresholding to segment tissue areas on the WSIs.\r\n- **Patching.** After segmentation, the tissue area is divided into patches at a size chosen by the user (eg. 224 x 224), which can be overlapping or non-overlapping.\r\n- **Coordinates extraction.** For each patch, the (x,y)-coordinates are saved to a .csv file from the tissue segmentation.\r\n- **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into $[1 \\times 1024]$ feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.\r\n- **Adjacency matrix construction.** The patch coordinates are used to create a region Adjacency matrix $A_{RAG}$, where edges existing between spatially adjacent patches are 1 if they are spatially adjacent and 0 otherwise. The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a KNN Adjacency matrix $A_{KNN}$ is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.\r\n- **Graph construction** The Adjacency matrices A_{RA} and $A_{KNN}$ are summed, with shared edges reset to 1, creating an Adjacency matrix $A_{KRAG}$. For each patient a directed, unweighted KNN+RA graph is initialised using the adjacency matrix $A_{KRAG}$, combining both local - RA - and global - KNN - information.\r\n- **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.\r\n- **Hierarchical Graph classification.** The KRAG is successively passed through four Graph Attention Network layers (GAT) and SAGPooling layers. The SAGPooling readouts from each layer are concatenated and passed through three MLP layers. This concatenated vector is passed through a self-attention head and finally classified.\r\n- **Heatmap generation.** Sagpool scores.\r\n\r\n## Set Up\r\n\r\n### General Requirements\r\n- Python 3.10.10\r\n- NVIDIA GPU with CUDA 12.1\r\n\r\n### Conda Environment\r\n```bash\r\nconda create -n krag python=3.10.10 -y\r\nconda activate krag\r\n\r\n# OpenSlide\r\nconda install -y -c conda-forge openslide openslide-python\r\n\r\n# PyTorch (Geometric)\r\nconda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia\r\npip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html\r\n\r\nconda install -y matplotlib\r\n```\r\n\r\n## Usage\r\n\r\n### Data Preprocessing\r\n\r\nDuring preprocessing, the following steps are performed: **tissue segmentation**, **patching**, **feature extraction**, **adjacency matrix construction**, and **graph construction**. Finally, **random walk positional encoding** is pre-computed on the generated graphs and stored as a pytorch geometric transform. \r\n\r\n#### Configuration File\r\n\r\nThe `config.yaml` file contains all the parameters needed for running KRAG. Modification of the input directory, output directory, and other parameters can be done there.\r\n\r\n#### Data Directory Structure\r\n\r\nThe WSIs should be stored in a directory structure as shown below. The `slides` folder is the `input_directory`, which the `config` file should point to. It should contain all the WSIs for each patient, with the naming convention `patientID_staintype.tiff`. The `patient_labels.csv` file should contain the patient IDs and the target labels for the task:\r\n\r\n```\r\n--- Dataset_name\r\n    patient_labels.csv\r\n    --- slides\r\n            --- patient1_HE.tiff\r\n            --- patient1_CD3.tiff\r\n            --- patient1_CD138.tiff\r\n                .\r\n                .\r\n            --- patientN_HE.tiff\r\n            --- patientN_CD138.tiff\r\n```\r\n\r\nPreprocessing can be run using the following command:\r\n\r\n```bash\r\npython main.py --preprocess\r\n```\r\n\r\nAlternatively, each step can be run separately:\r\n\r\n```bash\r\npython main.py --segmentation # tissue segmentation\r\npython main.py --embedding # Feature extraction and graph construction\r\npython main.py --compute_rwpe # Random walk positional encoding\r\n```\r\n\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/README.md b/README.md
+--- a/README.md	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/README.md	(date 1718806500893)
+@@ -82,4 +82,11 @@
+ python main.py --compute_rwpe # Random walk positional encoding
+ ```
+ 
++`--preprocess` will create 5 new folders: results, dictionaries, masks, contours and thumbnails.
++
++- results contains the patches folder, containing all the extracted patches, as well as the extracted_patches.csv file which contains all the patient_IDs, filenames, 	coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
++
++- masks contains all the downsampled binary masks obtained during tissue segmentation. 
++
++- Contours and thumbnails contain downsampled WSIs with mask contours and thumbnails of the WSIs as a sanity check. You can easily check you're segmenting the right 	thing and that there's no issues with the WSIs themselves.
+ 
+Index: config_file.yaml
+===================================================================
+diff --git a/config_file.yaml b/config_file.yaml
+deleted file mode 100644
+--- a/config_file.yaml	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ /dev/null	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
+@@ -1,62 +0,0 @@
+-# Input arguments for tissue segmentation and patching of Whole Slide Images
+-input_directory: "/slides/"               # Input data directory
+-directory: "/output_dir/"                 # Results directory path
+-patch_size: 224                           # Patch size (default: 224)
+-overlap: 0                                # Overlap (default: 0)
+-coverage: 0.3                             # Coverage (default: 0.3)
+-slide_level: 2                            # Slide level (default: 2)
+-mask_level: 3                             # Slide level (default: 3)
+-unet: false                               # Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding
+-unet_weights: "/path_to_unet_weights"     # Path to model checkpoints
+-patch_batch_size: 10                      # Batch size (default: 10)
+-name_parsing: "img_name.split('.')[0]"    # String parsing to obtain patient ID from image filename
+-multistain: false                         # Whether the dataset contains multiple types of staining. Will generate extracted_patches.csv with stain type info.
+-seed: 42                                  # Random seed
+-
+-# Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]
+-dataset_name: "RA"                        # Dataset name
+-label: "label"                            # Name of the target label in the metadata file
+-patient_id: "Patient_ID"                  # Name of column containing the patient ID
+-K: 7                                      # Number of nearest neighbours in k-NNG created from WSI embeddings
+-embedding_vector_size: 1000               # Embedding vector size
+-stratified_splits: 10                     # Number of random stratified splits
+-embedding_net: "resnet18"                 # Feature extraction network used
+-train_fraction: 0.7                       # Train fraction
+-graph_mode: "krag"                        # Change type of graph used for training here
+-n_classes: 2                              # Number of classes
+-slide_batch: 1                            # Slide batch size - default 1
+-num_workers: 0                            # Number of workers for data loading
+-stain_type: "all"                         # Type of stain used.
+-
+-# Pre-compute Random Walk positional encoding on the graph
+-encoding_size: 20                         # Size Random Walk positional encoding
+-
+-# Self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
+-hidden_dim: 512                           # Size of hidden network dimension
+-convolution: "GAT"                        # Change type of graph convolution used
+-positional_encoding: true                 # Add Random Walk positional encoding to the graph
+-learning_rate: 0.00001                    # Learning rate
+-pooling_ratio: 0.7                        # Pooling ratio
+-heads: 2                                  # Number of GAT heads
+-num_epochs: 50                            # Number of training epochs
+-batch_size: 1                             # Graph batch size for training
+-scheduler: 1                              # Learning rate schedule
+-checkpoint: true                          # Enables checkpointing of GNN weights.
+-l1_norm: 0.00001                          # L1-norm to regularise loss function
+-
+-# Heatmap generation for WSI
+-path_to_patches: "/data/scratch/wpw030/KRAG/results/patches/"   # Location of patches
+-heatmap_path: "/data/scratch/wpw030/KRAG/results/heatmaps/"      # Location of saved heatmap figs
+-checkpoint_weights: "/data/scratch/wpw030/KRAG/"                 # Location of trained model weights.
+-test_fold: "Fold_9"                       # Test fold
+-test_ids: false                           # Specific IDs to create heatmap on, rather than test fold.
+-slide_name: ['test_016', 'test_071', 'test_102']   # name of slides which to create heatmap for.
+-per_layer: false                          # If called, will create heatmaps for each layer of the GNN.
+-
+-# General arguments to determine if running preprocessing or training
+-preprocess: false                         # Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.
+-segmentation: false                       # Run tissue segmentation of WSI
+-embedding: false                          # Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]
+-compute_rwpe: false                       # Run pre-compute of Random Walk positional encoding on the graph
+-train: false                              # Run training
+-heatmap: false                            # Run heatmap generation for WSI, for each layer of the GNN or all together.
+\ No newline at end of file
+Index: create_heatmaps/main_krag_heatmap.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># -*- coding: utf-8 -*-\r\n\"\"\"\r\nCreated on Wed Mar  6 12:43:55 2024\r\n\r\n@author: AmayaGS\r\n\r\n\"\"\"\r\n\r\n# Misc\r\nimport os\r\nimport os.path\r\nimport pandas as pd\r\nimport pickle\r\nimport argparse\r\n\r\n# PyTorch\r\nimport torch\r\nimport torch.nn as nn\r\n\r\n# PyG\r\nfrom torch_geometric.loader import DataLoader\r\n\r\n# KRAG functions\r\nfrom training_loops.training_loop_heatmap import slide_att_scores, slide_att_scores_per_layer\r\nfrom utils.auxiliary_functions import seed_everything\r\nfrom models.krag_heatmap_models import KRAG_Classifier, KRAG_Classifier_per_layer\r\nfrom utils.utils_heatmap_generation import create_heatmaps, create_heatmaps_per_layer, normalize_attention_scores_per_layer\r\n\r\nos.environ[\"CUDA_LAUNCH_BLOCKING\"] = \"1\"\r\n\r\nuse_gpu = torch.cuda.is_available()\r\n\r\n\r\ndef heatmap_generation(args):\r\n\r\n    seed_everything(args.seed)\r\n    current_directory = args.directory\r\n    os.makedirs(args.heatmap_path, exist_ok=True)\r\n    img_folders = os.listdir(args.path_to_patches)\r\n    heatmaps = os.listdir(args.heatmap_path)\r\n    heatmap_list = [h[::-1].split(\"_\", 1)[1][::-1] for h in heatmaps]\r\n\r\n\r\n    # initialising graph, loss, optimiser between folds\r\n    loss_fn = nn.CrossEntropyLoss()\r\n    if per_layer:\r\n        graph_net = KRAG_Classifier_per_layer(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)\r\n    else:\r\n        graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)\r\n\r\n\r\n    for weight_root, _, weight_file in os.walk(args.checkpoint_weights):\r\n        weights = os.path.join(weight_root, weight_file[0])\r\n    checkpoint = torch.load(weights)\r\n    graph_net.load_state_dict(checkpoint, strict=True)\r\n\r\n    if use_gpu:\r\n        graph_net.cuda()\r\n\r\n    # load pickled graphs\r\n    if args.encoding_size == 0:\r\n        with open(current_directory + f\"/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"rb\") as file:\r\n            graph_dict = pickle.load(file)\r\n\r\n    if args.encoding_size > 0:\r\n        with open(current_directory + f\"/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl\", \"rb\") as file:\r\n            graph_dict = pickle.load(file)\r\n\r\n    # load train/test split\r\n    with open(current_directory + f\"/train_test_strat_splits_{args.dataset_name}.pkl\", \"rb\") as file:\r\n        splits = pickle.load(file)\r\n\r\n    test_ids = splits[args.test_fold]['Test']\r\n\r\n    results = []\r\n\r\n    for patient_id in args.test_ids:\r\n\r\n        slide_embedding = graph_dict[patient_id]\r\n        test_graph_loader = DataLoader(slide_embedding, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)\r\n\r\n        if per_layer:\r\n\r\n            attention_scores, actual_label, predicted_label = slide_att_scores_per_layer(graph_net, test_graph_loader, patient_id, loss_fn, n_classes=args.n_classes)\r\n            #results.append([patient_id, actual_label.item(), predicted_label.item()])\r\n\r\n            #with open(current_directory + f\"/attn_score_dict_{args.graph_mode}_{args.test_fold}_{patient_id}_{args.dataset_name}.pkl\", \"wb\") as file:\r\n            #    pickle.dump(attention_scores, file)\r\n\r\n            normalized_attention_scores = normalize_attention_scores_per_layer(attention_scores)\r\n            for i in range(4):\r\n                 create_heatmaps_per_layer(patient_id, i, normalized_attention_scores[patient_id][i], img_folders, args.heatmap_path, heatmap_list, args.path_to_patches, args.patch_size)\r\n\r\n        else:\r\n\r\n            attention_scores, actual_label, predicted_label = slide_att_scores(graph_net, test_graph_loader, patient_id, loss_fn, n_classes=args.n_classes)\r\n            create_heatmaps(patient_id, attention_scores, img_folders, args.heatmap_path, heatmap_list, args.path_to_patches, args.patch_size)\r\n\r\n            results.append([patient_id, actual_label.item(), predicted_label.item()])\r\n\r\n            with open(current_directory + f\"/attn_score_dict_{args.graph_mode}_{args.test_fold}_{patient_id}_{args.dataset_name}.pkl\", \"wb\") as file:\r\n                pickle.dump(attention_scores, file)\r\n\r\n    df_results = pd.DataFrame(results, columns=['Patient_ID', 'Label', 'Predicted_label'])\r\n    df_results.to_csv(current_directory + f\"/predicted_results_{args.graph_mode}_{args.test_fold}_{args.dataset_name}.csv\", index=False)\r\n\r\n#\r\n# if __name__ == \"__main__\":\r\n#\r\n#     graph_modes = ['krag']\r\n#     for graph in graph_modes:\r\n#         args = arg_parse()\r\n#         args.directory = \"/data/scratch/wpw030/CAMELYON16/feature_dictionaries/\"\r\n#         args.path_to_patches = \"/data/scratch/wpw030/CAMELYON16/results_10/patches/\"\r\n#         args.checkpoint_weights = \"/data/scratch/wpw030/CAMELYON16/krag_test_checkpoints/\"\r\n#         args.heatmap_path = \"/data/scratch/wpw030/CAMELYON16/heatmaps_per_layer/\"\r\n#         args.dataset_name = \"CAMELYON16\"\r\n#         args.embedding_net = 'resnet18'\r\n#         args.convolution = 'GAT'\r\n#         args.graph_mode = graph\r\n#         args.attention = False\r\n#         args.encoding_size = 20\r\n#         args.stain_type = 'H&E'\r\n#         args.test_fold = \"Fold 0\"\r\n#         args.test_ids = ['test_016', 'test_071', 'test_102']\r\n#         main(args)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/create_heatmaps/main_krag_heatmap.py b/create_heatmaps/main_krag_heatmap.py
+--- a/create_heatmaps/main_krag_heatmap.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/create_heatmaps/main_krag_heatmap.py	(date 1718806500901)
+@@ -103,24 +103,3 @@
+ 
+     df_results = pd.DataFrame(results, columns=['Patient_ID', 'Label', 'Predicted_label'])
+     df_results.to_csv(current_directory + f"/predicted_results_{args.graph_mode}_{args.test_fold}_{args.dataset_name}.csv", index=False)
+-
+-#
+-# if __name__ == "__main__":
+-#
+-#     graph_modes = ['krag']
+-#     for graph in graph_modes:
+-#         args = arg_parse()
+-#         args.directory = "/data/scratch/wpw030/CAMELYON16/feature_dictionaries/"
+-#         args.path_to_patches = "/data/scratch/wpw030/CAMELYON16/results_10/patches/"
+-#         args.checkpoint_weights = "/data/scratch/wpw030/CAMELYON16/krag_test_checkpoints/"
+-#         args.heatmap_path = "/data/scratch/wpw030/CAMELYON16/heatmaps_per_layer/"
+-#         args.dataset_name = "CAMELYON16"
+-#         args.embedding_net = 'resnet18'
+-#         args.convolution = 'GAT'
+-#         args.graph_mode = graph
+-#         args.attention = False
+-#         args.encoding_size = 20
+-#         args.stain_type = 'H&E'
+-#         args.test_fold = "Fold 0"
+-#         args.test_ids = ['test_016', 'test_071', 'test_102']
+-#         main(args)
+\ No newline at end of file
+Index: create_embeddings/embedding_main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># -*- coding: utf-8 -*-\r\n\r\n\"\"\"\r\nCreated on Wed Feb 28 19:45:09 2024\r\n\r\n@author: AmayaGS\r\n\"\"\"\r\n\r\n# Misc\r\nimport os\r\nimport pandas as pd\r\nimport pickle\r\n\r\n# sklearn\r\n\r\n# PyTorch\r\nimport torch\r\nfrom torchvision import transforms\r\n\r\n# KRAG functions\r\nfrom utils.utils_dataloaders import Loaders\r\nfrom models.embedding_models import VGG_embedding, resnet18_embedding, contrastive_resnet18, resnet50_embedding, convNext\r\nfrom utils.embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs\r\n\r\n# Set environment variables\r\nos.environ[\"CUDA_LAUNCH_BLOCKING\"] = \"1\"\r\n\r\n# Check for GPU availability\r\nuse_gpu = torch.cuda.is_available()\r\n\r\ndef patch_embedding(args):\r\n\r\n    # Set seed\r\n    seed_everything(args.seed)\r\n\r\n    # Image transforms\r\n    transform = transforms.Compose([\r\n        transforms.ToTensor(),\r\n        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))\r\n    ])\r\n\r\n    # Load df with patient_id and corresponding labels here, to merge with extracted patches.\r\n    patient_labels = pd.read_csv(args.directory + \"/patient_labels.csv\")\r\n    # Load file with all extracted patches metadata and locations.\r\n    extracted_patches = pd.read_csv(args.directory + \"/results_\" + str(args.slide_level) + \"/extracted_patches.csv\")\r\n\r\n    df = pd.merge(extracted_patches, patient_labels, on= args.patient_id)\r\n\r\n    if args.multistain:\r\n        df = df[df['Stain_type'] == args.stain_type]\r\n        df_labels = df.drop_duplicates(subset= args.patient_id)\r\n        ids = list(df_labels[args.patient_id])\r\n    else:\r\n      # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist\r\n        df_labels = df.drop_duplicates(subset= args.patient_id)\r\n        ids = list(df_labels[args.patient_id])\r\n\r\n    sss_dict_name = args.directory + f\"/train_test_strat_splits_{args.dataset_name}.pkl\"\r\n    if not os.path.exists(sss_dict_name):\r\n        # create the dictionary containing the patient ID dictionary of the stratified random splits\r\n        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.seed, args.dataset_name, args.directory)\r\n\r\n    # Create dictionary with patient ID as key and Dataloaders containing the corresponding patches as values.\r\n    slides = Loaders().slides_dataloader(df, ids, transform, slide_batch= args.slide_batch, num_workers= args.num_workers, shuffle= False, collate= collate_fn_none, label= args.label, patient_id= args.patient_id, multistain= args.multistain)\r\n\r\n    if args.embedding_net == 'resnet18':\r\n        # Load weights for resnet18\r\n        embedding_net = resnet18_embedding()\r\n    if args.embedding_net == 'ssl_resnet18':\r\n        # Load weights for resnet18\r\n        embedding_net = contrastive_resnet18('/data/scratch/wpw030/MUSTANGv2_scratch/tenpercent_resnet18.pt')\r\n    elif args.embedding_net == 'resnet50':\r\n        # Load weights for convnext\r\n        embedding_net = resnet50_embedding()\r\n    elif args.embedding_net == 'vgg16':\r\n        # Load weights for vgg16\r\n        embedding_net = VGG_embedding(embedding_vector_size=args.embedding_vector_size)\r\n    elif args.embedding_net == 'convnext':\r\n        # Load weights for convnext\r\n        embedding_net = convNext()\r\n\r\n    if use_gpu:\r\n         embedding_net.cuda()\r\n\r\n    print(f\"Start creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}\")\r\n    embedding_dict, knn_dict, rag_dict, krag_dict = create_embedding_graphs(embedding_net, slides, k=args.K, include_self=True, multistain=args.multistain)\r\n    print(f\"Done creating {args.dataset_name} embeddings and graph dictionaries for {args.embedding_net}\")\r\n\r\n    dictionaries = os.path.join(args.directory, \"dictionaries\")\r\n    os.makedirs(dictionaries, exist_ok = True)\r\n\r\n    with open(dictionaries + f\"/embedding_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"wb\") as file:\r\n        pickle.dump(embedding_dict, file)  # encode dict into Pickle\r\n        print(\"Done writing embedding_dict into pickle file\")\r\n\r\n    with open(dictionaries + f\"/knn_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"wb\") as file:\r\n        pickle.dump(knn_dict, file)  # encode dict into Pickle\r\n        print(\"Done writing knn_dict into pickle file\")\r\n\r\n    with open(dictionaries + f\"/rag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"wb\") as file:\r\n        pickle.dump(rag_dict, file)  # encode dict into Pickle\r\n        print(\"Done writing rag_dict into pickle file\")\r\n\r\n    with open(dictionaries + f\"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"wb\") as file:\r\n        pickle.dump(krag_dict, file)  # encode dict into Pickle\r\n        print(\"Done writing krag_dict into pickle file\")\r\n\r\n\r\n#\r\n# if __name__ == \"__main__\":\r\n#\r\n#   args = arg_parse()\r\n#   args.directory = \"/data/scratch/wpw030/CAMELYON16/results_5/\"\r\n#   args.label = 'label'\r\n#   args.patient_id = 'Patient_ID'\r\n#   args.K = 8\r\n#   args.dataset_name = \"CAMELYON16\"\r\n#   args.embedding_net = 'resnet18'\r\n#   args.multistain = False\r\n#   args.stain_type = \"H&E\"\r\n#   main(args)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/create_embeddings/embedding_main.py b/create_embeddings/embedding_main.py
+--- a/create_embeddings/embedding_main.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/create_embeddings/embedding_main.py	(date 1718806500904)
+@@ -104,18 +104,3 @@
+     with open(dictionaries + f"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+         pickle.dump(krag_dict, file)  # encode dict into Pickle
+         print("Done writing krag_dict into pickle file")
+-
+-
+-#
+-# if __name__ == "__main__":
+-#
+-#   args = arg_parse()
+-#   args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
+-#   args.label = 'label'
+-#   args.patient_id = 'Patient_ID'
+-#   args.K = 8
+-#   args.dataset_name = "CAMELYON16"
+-#   args.embedding_net = 'resnet18'
+-#   args.multistain = False
+-#   args.stain_type = "H&E"
+-#   main(args)
+\ No newline at end of file
+Index: tissue_segmentation/main_tissue_segmentation.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># -*- coding: utf-8 -*-\r\n\"\"\"\r\nCreated on Tue Apr 23 10:54:34 2024\r\n\r\n@author: AmayaGS\r\n\"\"\"\r\n\r\n# Misc\r\nimport os\r\n\r\n# UTILS\r\nfrom utils.utils_tissue_segmentation import save_patches\r\n\r\ndef tissue_segmentation(args):\r\n\r\n    # Loading paths\r\n    os.makedirs(args.directory, exist_ok =True)\r\n\r\n    save_patches(image_dir= args.input_directory,\r\n                 output_dir= args.directory,\r\n                 slide_level= args.slide_level,\r\n                 mask_level= args.mask_level,\r\n                 patch_size= args.patch_size,\r\n                 unet= args.unet,\r\n                 unet_weights= args.unet_weights,\r\n                 batch_size= args.patch_batch_size,\r\n                 coverage= args.coverage,\r\n                 name_parsing= args.name_parsing,\r\n                 multistain= args.multistain)\r\n\r\n# if __name__ == \"__main__\":\r\n#     args = arg_parse()\r\n#     args.input_directory = r\"C:\\Users\\Amaya\\Documents\\PhD\\Data\\R4RA_slides\"\r\n#     args.ouput_directory = r\"C:\\Users\\Amaya\\Documents\\PhD\\Data\\R4RA_results\"\r\n#     args.slide_level = 1\r\n#     args.mask_level = 1\r\n#     args.batch_size = 10\r\n#     args.coverage = 0.3\r\n#     args.unet = False\r\n#     args.name_parsing = 'img_name.split(\"_\")'\r\n#     args.multistain = True\r\n#     args.unet_weights = r\"C:\\Users\\Amaya\\Documents\\PhD\\IHC-segmentation\\IHC_segmentation\\IHC_Synovium_Segmentation\\UNet weights\\UNet_512_1.pth.tar\"\r\n#     main(args)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/tissue_segmentation/main_tissue_segmentation.py b/tissue_segmentation/main_tissue_segmentation.py
+--- a/tissue_segmentation/main_tissue_segmentation.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/tissue_segmentation/main_tissue_segmentation.py	(date 1718806500907)
+@@ -27,17 +27,3 @@
+                  coverage= args.coverage,
+                  name_parsing= args.name_parsing,
+                  multistain= args.multistain)
+-
+-# if __name__ == "__main__":
+-#     args = arg_parse()
+-#     args.input_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_slides"
+-#     args.ouput_directory = r"C:\Users\Amaya\Documents\PhD\Data\R4RA_results"
+-#     args.slide_level = 1
+-#     args.mask_level = 1
+-#     args.batch_size = 10
+-#     args.coverage = 0.3
+-#     args.unet = False
+-#     args.name_parsing = 'img_name.split("_")'
+-#     args.multistain = True
+-#     args.unet_weights = r"C:\Users\Amaya\Documents\PhD\IHC-segmentation\IHC_segmentation\IHC_Synovium_Segmentation\UNet weights\UNet_512_1.pth.tar"
+-#     main(args)
+\ No newline at end of file
+Index: create_rwpe/compute_rwpe_on_graph.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># -*- coding: utf-8 -*-\r\n\"\"\"\r\nCreated on Tue Mar  5 16:29:52 2024\r\n\r\n@author: AmayaGS\r\n\"\"\"\r\n\r\n# misc\r\nimport pickle\r\n\r\n# pytorch\r\nimport torch\r\n\r\n# torch geometric\r\nimport torch_geometric.transforms as T\r\n\r\n# MUSTANG functions\r\nfrom utils.auxiliary_functions import seed_everything\r\n\r\nuse_gpu = torch.cuda.is_available()\r\n\r\nimport gc\r\ngc.enable()\r\n\r\ndef add_pe_to_graph(loader, walk_length):\r\n\r\n    loader_PE = {}\r\n\r\n    for batch_idx, (patient_ID, graph_object) in enumerate(loader.items()):\r\n\r\n        data, label, folder_ids, filenames = graph_object\r\n\r\n        transform = T.AddRandomWalkPE(walk_length)\r\n        data = transform(data)\r\n\r\n        data.x = torch.cat([data.x, data.random_walk_pe], dim=1)\r\n\r\n        loader_PE[patient_ID] = [data, label, folder_ids, filenames]\r\n\r\n        del data, label, folder_ids, filenames, patient_ID, graph_object\r\n        gc.collect()\r\n\r\n    return loader_PE\r\n\r\n\r\n\r\ndef compute_rwpe(args):\r\n\r\n    seed_everything(args.seed)\r\n\r\n    current_directory = args.directory\r\n\r\n    # load pickled graphs\r\n    with open(current_directory + f\"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"rb\") as file:\r\n        graph_dict = pickle.load(file)\r\n\r\n    # adding RWPE here\r\n    graph_dict = add_pe_to_graph(graph_dict, args.encoding_size)\r\n\r\n    with open(current_directory + f\"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl\", \"wb\") as file:\r\n        pickle.dump(graph_dict, file)  # encode dict into Pickle\r\n\r\n#\r\n# if __name__ == \"__main__\":\r\n#     args = arg_parse()\r\n#     graph_types = ['krag']\r\n#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']\r\n#     #stains = ['H&E','CD68', 'CD20', 'CD138']\r\n#     stains = ['H&E']\r\n#     #stains = ['all']\r\n#     for graph_type in graph_types:\r\n#         for stain in stains:\r\n#             args.dataset_name = \"CAMELYON16\"\r\n#             args.directory = \"/data/scratch/wpw030/CAMELYON16/results_5/\"\r\n#             args.embedding_net = 'resnet18'\r\n#             args.graph_mode = graph_type\r\n#             args.encoding_size = 20\r\n#             args.stains = stain\r\n#             main(args)\r\n#\r\n# # # %%
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/create_rwpe/compute_rwpe_on_graph.py b/create_rwpe/compute_rwpe_on_graph.py
+--- a/create_rwpe/compute_rwpe_on_graph.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/create_rwpe/compute_rwpe_on_graph.py	(date 1718806500911)
+@@ -43,7 +43,6 @@
+     return loader_PE
+ 
+ 
+-
+ def compute_rwpe(args):
+ 
+     seed_everything(args.seed)
+@@ -59,23 +58,3 @@
+ 
+     with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
+         pickle.dump(graph_dict, file)  # encode dict into Pickle
+-
+-#
+-# if __name__ == "__main__":
+-#     args = arg_parse()
+-#     graph_types = ['krag']
+-#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
+-#     #stains = ['H&E','CD68', 'CD20', 'CD138']
+-#     stains = ['H&E']
+-#     #stains = ['all']
+-#     for graph_type in graph_types:
+-#         for stain in stains:
+-#             args.dataset_name = "CAMELYON16"
+-#             args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
+-#             args.embedding_net = 'resnet18'
+-#             args.graph_mode = graph_type
+-#             args.encoding_size = 20
+-#             args.stains = stain
+-#             main(args)
+-#
+-# # # %%
+\ No newline at end of file
+Index: train_krag_model/main_krag.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># -*- coding: utf-8 -*-\r\n\"\"\"\r\nCreated on Wed Mar  6 12:43:55 2024\r\n\r\n@author: AmayaGS\r\n\"\"\"\r\n\r\n# Misc\r\nimport os\r\nimport os.path\r\nimport numpy as np\r\nimport pandas as pd\r\nimport statistics\r\nfrom collections import Counter\r\nimport pickle\r\n\r\n# PyTorch\r\nimport torch\r\nimport torch.nn as nn\r\nimport torch.optim as optim\r\n\r\n# PyG\r\nfrom torch_geometric.loader import DataLoader\r\n\r\n# KRAG functions\r\nfrom training_loops.krag_training_loop import train_graph_multi_wsi\r\nfrom utils.auxiliary_functions import seed_everything\r\nfrom models.krag_model import KRAG_Classifier\r\n\r\nos.environ[\"CUDA_LAUNCH_BLOCKING\"] = \"1\"\r\n\r\nuse_gpu = torch.cuda.is_available()\r\n\r\ndef minority_sampler(train_graph_dict):\r\n\r\n    # calculate weights for minority oversampling\r\n    count = []\r\n    for k, v in train_graph_dict.items():\r\n        count.append(v[1].item())\r\n    counter = Counter(count)\r\n    class_count = np.array(list(counter.values()))\r\n    weight = 1 / class_count\r\n    samples_weight = np.array([weight[t] for t in count])\r\n    samples_weight = torch.from_numpy(samples_weight)\r\n    sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight.type('torch.DoubleTensor'), num_samples=len(samples_weight),  replacement=True)\r\n\r\n    return sampler\r\n\r\n\r\ndef train_krag(args):\r\n\r\n    seed_everything(args.seed)\r\n\r\n    current_directory = args.directory\r\n    run_results_folder = f\"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_att_{args.attention}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}\"\r\n    results = os.path.join(current_directory, \"results/\" + run_results_folder)\r\n    checkpoints = results + \"/checkpoints\"\r\n    os.makedirs(results, exist_ok = True)\r\n    os.makedirs(checkpoints, exist_ok = True)\r\n\r\n    # load pickled graphs\r\n    if args.encoding_size == 0:\r\n        with open(current_directory + f\"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl\", \"rb\") as file:\r\n            graph_dict = pickle.load(file)\r\n\r\n    if args.encoding_size > 0:\r\n        with open(current_directory + f\"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl\", \"rb\") as file:\r\n            graph_dict = pickle.load(file)\r\n\r\n\r\n    # load stratified random split train/test folds\r\n    with open(current_directory + f\"/train_test_strat_splits_{args.dataset_name}.pkl\", \"rb\") as splits:\r\n        sss_folds = pickle.load(splits)\r\n\r\n    mean_best_acc = []\r\n    mean_best_AUC = []\r\n\r\n    training_folds = []\r\n    testing_folds = []\r\n    for folds, splits in sss_folds.items():\r\n        for i, (split, patient_ids) in enumerate(splits.items()):\r\n            if i == 0:\r\n                train_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))\r\n                training_folds.append(train_dict)\r\n            if i ==1:\r\n                test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))\r\n                testing_folds.append(test_dict)\r\n\r\n    for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):\r\n\r\n        # initialising new graph, loss, optimiser between folds\r\n        graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)\r\n        loss_fn = nn.CrossEntropyLoss()\r\n        optimizer_ft = optim.AdamW(graph_net.parameters(), lr=args.learning_rate, weight_decay=0.01)\r\n        lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer_ft, milestones=[25, 50, 75], gamma=0.1)\r\n        if use_gpu:\r\n            graph_net.cuda()\r\n\r\n        # oversampling of minority class\r\n        sampler = minority_sampler(train_fold)\r\n\r\n        train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)\r\n        test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)\r\n\r\n        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + \"/checkpoint_fold_\" + str(fold_idx) + \"_epoch_\")\r\n\r\n        # save results to csv file\r\n        mean_best_acc.append(best_acc.item())\r\n        mean_best_AUC.append(best_AUC.item())\r\n\r\n        df_results = pd.DataFrame.from_dict(results_dict)\r\n        df_results.to_csv(results + \"/\" + run_results_folder + \"_fold_\" + str(fold_idx) + \".csv\", index=False)\r\n\r\n    average_best_acc = sum(mean_best_acc) / len(mean_best_acc)\r\n    std_best_acc = statistics.pstdev(mean_best_acc)\r\n    mean_best_acc.append(average_best_acc)\r\n    mean_best_acc.append(std_best_acc)\r\n\r\n    average_best_AUC = sum(mean_best_AUC) / len(mean_best_AUC)\r\n    std_best_AUC = statistics.pstdev(mean_best_AUC)\r\n    mean_best_AUC.append(average_best_AUC)\r\n    mean_best_AUC.append(std_best_AUC)\r\n\r\n    summary =[mean_best_acc] + [mean_best_AUC]\r\n    summary_df = pd.DataFrame(summary, index=['val_accuracy', 'val_AUC']).transpose()\r\n    summary_df.to_csv(results + \"/\" + run_results_folder + \"_summary_best_scores.csv\", index=0)\r\n\r\n\r\n#\r\n# if __name__ == \"__main__\":\r\n#\r\n#     datasets = ['R4RA', 'Sjogren', 'CAMELYON16', 'NSCLC']\r\n#     graph_types = ['krag']\r\n#     random_seeds = [42]\r\n#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']\r\n#     #stains = ['H&E', 'CD68', 'CD20', 'CD138']\r\n#     #stains = ['all']\r\n#     stains = ['CD20']\r\n#     for graph_type in graph_types:\r\n#         for stain in stains:\r\n#             for seed in random_seeds:\r\n#                 args = arg_parse()\r\n#                 args.seed = seed\r\n#                 args.directory = \"/data/scratch/wpw030/Sjogren_patches/results_1/\"\r\n#                 args.checkpoint = True\r\n#                 args.dataset_name = \"Sjogren\"\r\n#                 args.n_classes = 2\r\n#                 args.embedding_net = 'vgg16'\r\n#                 args.convolution = 'GAT'\r\n#                 args.graph_mode = graph_type\r\n#                 args.attention = False\r\n#                 args.encoding_size = 20\r\n#                 args.learning_rate = 0.00001\r\n#                 args.scheduler = 'L2_0.01'\r\n#                 args.num_epochs = 150\r\n#                 args.multistain = True\r\n#                 args.stain_type = stain\r\n#                 args.l1_norm = 0.0\r\n#                 main(args)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/train_krag_model/main_krag.py b/train_krag_model/main_krag.py
+--- a/train_krag_model/main_krag.py	(revision 18e7795e5486f2de2d11881a46f9073c49f37260)
++++ b/train_krag_model/main_krag.py	(date 1718806500914)
+@@ -53,7 +53,7 @@
+ 
+     current_directory = args.directory
+     run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_att_{args.attention}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
+-    results = os.path.join(current_directory, "results/" + run_results_folder)
++    results = os.path.join(current_directory, "training_results/" + run_results_folder)
+     checkpoints = results + "/checkpoints"
+     os.makedirs(results, exist_ok = True)
+     os.makedirs(checkpoints, exist_ok = True)
+@@ -124,36 +124,3 @@
+     summary =[mean_best_acc] + [mean_best_AUC]
+     summary_df = pd.DataFrame(summary, index=['val_accuracy', 'val_AUC']).transpose()
+     summary_df.to_csv(results + "/" + run_results_folder + "_summary_best_scores.csv", index=0)
+-
+-
+-#
+-# if __name__ == "__main__":
+-#
+-#     datasets = ['R4RA', 'Sjogren', 'CAMELYON16', 'NSCLC']
+-#     graph_types = ['krag']
+-#     random_seeds = [42]
+-#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
+-#     #stains = ['H&E', 'CD68', 'CD20', 'CD138']
+-#     #stains = ['all']
+-#     stains = ['CD20']
+-#     for graph_type in graph_types:
+-#         for stain in stains:
+-#             for seed in random_seeds:
+-#                 args = arg_parse()
+-#                 args.seed = seed
+-#                 args.directory = "/data/scratch/wpw030/Sjogren_patches/results_1/"
+-#                 args.checkpoint = True
+-#                 args.dataset_name = "Sjogren"
+-#                 args.n_classes = 2
+-#                 args.embedding_net = 'vgg16'
+-#                 args.convolution = 'GAT'
+-#                 args.graph_mode = graph_type
+-#                 args.attention = False
+-#                 args.encoding_size = 20
+-#                 args.learning_rate = 0.00001
+-#                 args.scheduler = 'L2_0.01'
+-#                 args.num_epochs = 150
+-#                 args.multistain = True
+-#                 args.stain_type = stain
+-#                 args.l1_norm = 0.0
+-#                 main(args)
+\ No newline at end of file

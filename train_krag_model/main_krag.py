@@ -53,7 +53,7 @@ def train_krag(args):
 
     current_directory = args.directory
     run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_att_{args.attention}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
-    results = os.path.join(current_directory, "results/" + run_results_folder)
+    results = os.path.join(current_directory, "training_results/" + run_results_folder)
     checkpoints = results + "/checkpoints"
     os.makedirs(results, exist_ok = True)
     os.makedirs(checkpoints, exist_ok = True)
@@ -124,36 +124,3 @@ def train_krag(args):
     summary =[mean_best_acc] + [mean_best_AUC]
     summary_df = pd.DataFrame(summary, index=['val_accuracy', 'val_AUC']).transpose()
     summary_df.to_csv(results + "/" + run_results_folder + "_summary_best_scores.csv", index=0)
-
-
-#
-# if __name__ == "__main__":
-#
-#     datasets = ['R4RA', 'Sjogren', 'CAMELYON16', 'NSCLC']
-#     graph_types = ['krag']
-#     random_seeds = [42]
-#     #stains = ['HE', 'CD20', 'CD138', 'CD3', 'CD21']
-#     #stains = ['H&E', 'CD68', 'CD20', 'CD138']
-#     #stains = ['all']
-#     stains = ['CD20']
-#     for graph_type in graph_types:
-#         for stain in stains:
-#             for seed in random_seeds:
-#                 args = arg_parse()
-#                 args.seed = seed
-#                 args.directory = "/data/scratch/wpw030/Sjogren_patches/results_1/"
-#                 args.checkpoint = True
-#                 args.dataset_name = "Sjogren"
-#                 args.n_classes = 2
-#                 args.embedding_net = 'vgg16'
-#                 args.convolution = 'GAT'
-#                 args.graph_mode = graph_type
-#                 args.attention = False
-#                 args.encoding_size = 20
-#                 args.learning_rate = 0.00001
-#                 args.scheduler = 'L2_0.01'
-#                 args.num_epochs = 150
-#                 args.multistain = True
-#                 args.stain_type = stain
-#                 args.l1_norm = 0.0
-#                 main(args)

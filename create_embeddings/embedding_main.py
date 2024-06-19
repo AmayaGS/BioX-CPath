@@ -104,18 +104,3 @@ def patch_embedding(args):
     with open(dictionaries + f"/krag_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "wb") as file:
         pickle.dump(krag_dict, file)  # encode dict into Pickle
         print("Done writing krag_dict into pickle file")
-
-
-#
-# if __name__ == "__main__":
-#
-#   args = arg_parse()
-#   args.directory = "/data/scratch/wpw030/CAMELYON16/results_5/"
-#   args.label = 'label'
-#   args.patient_id = 'Patient_ID'
-#   args.K = 8
-#   args.dataset_name = "CAMELYON16"
-#   args.embedding_net = 'resnet18'
-#   args.multistain = False
-#   args.stain_type = "H&E"
-#   main(args)

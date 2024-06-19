@@ -172,7 +172,7 @@ def unet_binary_mask(model, transform, slide, mask_path, contours_path, mask_lev
     return binary_mask
 
 
-def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, unet, unet_weights, batch_size, coverage, name_parsing, multistain):
+def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, unet, unet_weights, batch_size, coverage, name_parsing, stain_parsing, multistain):
 
     mask_dir = os.path.join(output_dir, 'masks')
     contours_dir = os.path.join(output_dir, 'contours')
@@ -216,7 +216,7 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
             img_name = img[:-len_file_type]
             patient_id = eval(name_parsing)
             if multistain:
-                stain_type =  eval(name_parsing)[1]
+                stain_type = eval(stain_parsing)
             mask_name = img_name + ".png"
             mask_path = os.path.join(mask_dir, mask_name)
             contour_path = os.path.join(contours_dir, mask_name)
