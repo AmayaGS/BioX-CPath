@@ -17,13 +17,9 @@ class VGG_embedding(nn.Module):
     VGG16 embedding network for WSI patches
     """
 
-    def __init__(self, embedding_vector_size=1000):
+    def __init__(self, embedding_vector_size):
         super(VGG_embedding, self).__init__()
         embedding_net = vgg16_bn(weights=VGG16_BN_Weights.IMAGENET1K_V1)
-
-        # Freeze training for all layers
-        for param in embedding_net.parameters():
-            param.require_grad = False
 
         # Newly created modules have require_grad=True by default
         num_features = embedding_net.classifier[6].in_features
@@ -31,6 +27,10 @@ class VGG_embedding(nn.Module):
         features.extend([nn.Linear(num_features, embedding_vector_size)])
         embedding_net.classifier = nn.Sequential(*features) # Replace the model classifier
         self.vgg_embedding = nn.Sequential(embedding_net)
+
+        # Freeze training for all layers
+        for param in embedding_net.parameters():
+            param.require_grad = False
 
     def forward(self, x):
 
@@ -42,12 +42,15 @@ class VGG_embedding(nn.Module):
 
 class convNext(nn.Module):
 
-    def __init__(self):
+    def __init__(self, embedding_vector_size)
 
         super(convNext, self).__init__()
         model = convnext_base(
             weights=ConvNeXt_Base_Weights.IMAGENET1K_V1)
-        feature_extractor = nn.Sequential(*list(model.children()))
+        features = list(model.children())[:-1]  # Remove last layer
+        features.extend([nn.Linear(num_features, embedding_vector_size)])
+        model.classifier = nn.Sequential(*features)
+        feature_extractor = nn.Sequential(*list(model.children())[:-1]) #Remove last layer
 
         for param in feature_extractor.parameters():
             param.require_grad = False
