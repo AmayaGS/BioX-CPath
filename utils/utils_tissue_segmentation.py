@@ -84,7 +84,7 @@ def tresh_binary_mask(slide, mask_path, contours_path, mask_level):
             cv2.drawContours(contour_results, [cont], -1, (0,0,255), 3)
             cv2.drawContours(mask1, [cont], -1, (255,255,255), -1)
     cv2.imwrite(mask_path, mask1)
-    cv2.imwrite(contours_path, contour_results)
+    cv2.imwrite(contours_path,  cv2.cvtColor(contour_results, cv2.COLOR_RGB2BGR))
 
     return mask1
 
@@ -226,7 +226,7 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
             width = slide.level_dimensions[slide_level][0]
             height = slide.level_dimensions[slide_level][1]
             downsample = int(slide.level_downsamples[slide_level])
-            print(f"Processing WSI: {patient_id}, height: {height}, width: {width}, downsample: {downsample}")
+            print(f"Processing WSI: {img_name}, height: {height}, width: {width}, slide level: {slide_level}, downsample factor: {downsample}")
 
             if not os.path.exists(thumbnail_path + '.png'):
 

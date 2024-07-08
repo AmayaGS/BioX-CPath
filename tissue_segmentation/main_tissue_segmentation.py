@@ -25,6 +25,6 @@ def tissue_segmentation(args):
                  unet_weights= args.unet_weights,
                  batch_size= args.patch_batch_size,
                  coverage= args.coverage,
-                 name_parsing= args.name_parsing,
+                 name_parsing= args.patient_ID_parsing,
                  stain_parsing=args.stain_parsing,
                  multistain= args.multistain)

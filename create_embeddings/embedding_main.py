@@ -68,7 +68,7 @@ def patch_embedding(args):
         embedding_net = resnet18_embedding()
     if args.embedding_net == 'ssl_resnet18':
         # Load weights for resnet18
-        embedding_net = contrastive_resnet18('/data/scratch/wpw030/MUSTANGv2_scratch/tenpercent_resnet18.pt')
+        embedding_net = contrastive_resnet18(args.embedding_weights)
     elif args.embedding_net == 'resnet50':
         # Load weights for convnext
         embedding_net = resnet50_embedding()
