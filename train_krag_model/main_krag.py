@@ -76,17 +76,21 @@ def train_krag(args):
     mean_best_AUC = []
 
     training_folds = []
+    validation_folds = []
     testing_folds = []
     for folds, splits in sss_folds.items():
         for i, (split, patient_ids) in enumerate(splits.items()):
             if i == 0:
                 train_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 training_folds.append(train_dict)
-            if i == 1:
+            if i== 1:
+                val_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
+                validation_folds.append(val_dict)
+            if i == 2:
                 test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 testing_folds.append(test_dict)
 
-    for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
+    for fold_idx, (train_fold, val_folds) in enumerate(zip(training_folds, validation_folds)):
 
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution)
@@ -100,9 +104,10 @@ def train_krag(args):
         sampler = minority_sampler(train_fold)
 
         train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
-        test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
+        val_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
+        #test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, test_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
         # save results to csv file
         mean_best_acc.append(best_acc.item())
