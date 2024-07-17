@@ -1,4 +1,7 @@
+[![DOI:10.1101/2021.01.08](http://img.shields.io/badge/DOI-10.1101/2021.01.08-B31B1B.svg)](https://doi.org/10.1101/2021.01.08.)
+
 # KRAG
+
 
 **Extracting complex disease signatures using graphs for  classification of heterogeneous Whole Slide Images**
 
