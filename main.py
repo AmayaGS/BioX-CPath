@@ -13,8 +13,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Input arguments for applying KRAG to Whole Slide Images")
 
     # Input arguments for tissue segmentation and patching of Whole Slide Images
-    parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG\TRACTISS_H&E", help='Input data directory')
-    parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_KRAG", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
+    parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\R4RA_slides", help='Input data directory')
+    parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_RA", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
     parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
     parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
     parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
@@ -33,9 +33,10 @@ if __name__ == "__main__":
     parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
     parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
     parser.add_argument("--embedding_vector_size", type=int, default=1000, help="Embedding vector size")
-    parser.add_argument("--stratified_splits", type=int, default=10, help="Number of random stratified splits")
+    parser.add_argument("--stratified_splits", type=int, default=5, help="Number of random stratified splits")
     parser.add_argument("--embedding_net", type=str, default="resnet18", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
-    parser.add_argument("--train_fraction", type=float, default=0.7, help="Train fraction")
+    parser.add_argument("--train_fraction", type=float, default=0.8, help="Train fraction")
+    parser.add_argument("--val_fraction", type=float, default=0.15, help="Validation fraction")
     parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
     parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
     parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
 
     #pre-compute Random Walk positional encoding on the graph
-    parser.add_argument("--encoding_size", type=int, default=20, help="Size Random Walk positional encoding")
+    parser.add_argument("--encoding_size", type=int, default=5, help="Size Random Walk positional encoding")
 
     #self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level"
     parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
     parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
     parser.add_argument("--checkpoint", action="store_true", default=True, help="Enables checkpointing of GNN weights.")
-    parser.add_argument("--l1_norm", type=int, default=0.00001, help="L1-norm to regularise loss function")
+    parser.add_argument("--l1_norm", type=int, default=0, help="L1-norm to regularise loss function")
 
     # heatmap generation for WSI
     parser.add_argument("--path_to_patches", type=str, default="/data/scratch/wpw030/KRAG/results/patches/", help="Location of patches")
@@ -111,7 +112,7 @@ if __name__ == "__main__":
         print("Running pre-compute of Random Walk positional encoding on the graph")
         # Run pre-compute of Random Walk positional encoding on the graph
         compute_rwpe(args)
-        printt("Done running pre-compute of Random Walk positional encoding on the graph")
+        print("Done running pre-compute of Random Walk positional encoding on the graph")
 
     # Run training of the self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
     if args.train:

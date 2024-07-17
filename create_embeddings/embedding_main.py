@@ -58,7 +58,7 @@ def patch_embedding(args):
     sss_dict_name = args.directory + f"/train_test_strat_splits_{args.dataset_name}.pkl"
     if not os.path.exists(sss_dict_name):
         # create the dictionary containing the patient ID dictionary of the stratified random splits
-        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.seed, args.dataset_name, args.directory)
+        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.val_fraction, args.stratified_splits, args.seed, args.dataset_name, args.directory)
 
     # Create dictionary with patient ID as key and Dataloaders containing the corresponding patches as values.
     slides = Loaders().slides_dataloader(df, ids, transform, slide_batch= args.slide_batch, num_workers= args.num_workers, shuffle= False, collate= collate_fn_none, label= args.label, patient_id= args.patient_id, multistain= args.multistain)

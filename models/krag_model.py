@@ -17,17 +17,17 @@ from torch_geometric.nn import SAGPooling
 
 class KRAG_Classifier(nn.Module):
 
-    def __init__(self, in_features, hidden_dim, num_classes, heads, pooling_ratio, walk_length, conv_type, attention):
+    def __init__(self, in_features, hidden_dim, num_classes, heads, pooling_ratio, walk_length, conv_type):
 
         super(KRAG_Classifier, self).__init__()
 
-        self.attention = attention
+        # self.attention = attention
 
         self.krag = pooling_network(in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type)
 
-        if self.attention:
-            self.attention_weights = nn.Parameter(torch.Tensor(hidden_dim * 2, hidden_dim * 2))
-            nn.init.xavier_uniform_(self.attention_weights)
+        # if self.attention:
+        #     self.attention_weights = nn.Parameter(torch.Tensor(hidden_dim * 2, hidden_dim * 2))
+        #     nn.init.xavier_uniform_(self.attention_weights)
 
         self.lin1 = torch.nn.Linear(hidden_dim * 2, hidden_dim)
         self.lin2 = torch.nn.Linear(hidden_dim, hidden_dim // 2)
@@ -37,10 +37,10 @@ class KRAG_Classifier(nn.Module):
 
         x = self.krag(data)
 
-        if self.attention:
-            attention_scores = torch.matmul(x, self.attention_weights) # 1* hidden_dim * 2
-            attention_scores = F.softmax(attention_scores, dim= -1)
-            x = torch.sum(x * attention_scores, dim=0).unsqueeze(0) # hidden_dim * 2
+        # if self.attention:
+        #     attention_scores = torch.matmul(x, self.attention_weights) # 1* hidden_dim * 2
+        #     attention_scores = F.softmax(attention_scores, dim= -1)
+        #     x = torch.sum(x * attention_scores, dim=0).unsqueeze(0) # hidden_dim * 2
 
         x = self.lin1(x)
         x = F.relu(x)

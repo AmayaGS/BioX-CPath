@@ -52,7 +52,7 @@ def train_krag(args):
     seed_everything(args.seed)
 
     current_directory = args.directory
-    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_att_{args.attention}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
+    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
     results = os.path.join(current_directory, "results/" + run_results_folder)
     checkpoints = results + "/checkpoints"
     os.makedirs(results, exist_ok = True)
@@ -82,14 +82,14 @@ def train_krag(args):
             if i == 0:
                 train_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 training_folds.append(train_dict)
-            if i ==1:
+            if i == 1:
                 test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 testing_folds.append(test_dict)
 
     for fold_idx, (train_fold, test_fold) in enumerate(zip(training_folds, testing_folds)):
 
         # initialising new graph, loss, optimiser between folds
-        graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution, attention= args.attention)
+        graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution)
         loss_fn = nn.CrossEntropyLoss()
         optimizer_ft = optim.AdamW(graph_net.parameters(), lr=args.learning_rate, weight_decay=0.01)
         lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer_ft, milestones=[25, 50, 75], gamma=0.1)
