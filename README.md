@@ -47,9 +47,9 @@ conda install -y matplotlib
 
 During preprocessing, the following steps are performed: **tissue segmentation**, **patching**, **feature extraction**, **adjacency matrix construction**, and **graph construction**. Finally, **random walk positional encoding** is pre-computed on the generated graphs and stored as a pytorch geometric transform. 
 
-#### Configuration File
+#### Arguments
 
-The `config.yaml` file contains all the parameters needed for running KRAG. Modification of the input directory, output directory, and other parameters can be done there.
+All argumuments used to run the code are defined using `Argument parser` and can be modified using the command line.
 
 #### Data Directory Structure
 
@@ -71,15 +71,24 @@ The WSIs should be stored in a directory structure as shown below. The `slides` 
 Preprocessing can be run using the following command:
 
 ```bash
-python main.py --preprocess
+python main.py --preprocess --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
 ```
+`--preprocess` will create 5 new folders: results, dictionaries, masks, contours and thumbnails.
 
-Alternatively, each step can be run separately:
+- `results` contains the patches folder, containing all the extracted patches, as well as the `extracted_patches.csv` file which contains all the patient_IDs, filenames, coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
+
+- `masks` contains all the downsampled binary masks obtained during tissue segmentation. 
+
+- `Contours` and `thumbnails` contain downsampled WSIs with mask contours and thumbnails of the WSIs as a sanity check. You can easily check you're segmenting the right thing and that there's no issues with the WSIs themselves.
+
+Alternatively, each step can be run separately (if you already have binary masks or embedded feature vectors for example) using the following commands:
 
 ```bash
 python main.py --segmentation # tissue segmentation
 python main.py --embedding # Feature extraction and graph construction
 python main.py --compute_rwpe # Random walk positional encoding
 ```
+
+
 
 

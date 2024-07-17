@@ -17,7 +17,8 @@ class VGG_embedding(nn.Module):
     VGG16 embedding network for WSI patches
     """
 
-    def __init__(self, embedding_vector_size=1000):
+    def __init__(self, embedding_vector_size):
+
         super(VGG_embedding, self).__init__()
         embedding_net = vgg16_bn(weights=VGG16_BN_Weights.IMAGENET1K_V1)
 
@@ -42,33 +43,40 @@ class VGG_embedding(nn.Module):
 
 class convNext(nn.Module):
 
-    def __init__(self):
+    def __init__(self, embedding_vector_size):
 
         super(convNext, self).__init__()
         model = convnext_base(
             weights=ConvNeXt_Base_Weights.IMAGENET1K_V1)
-        feature_extractor = nn.Sequential(*list(model.children()))
 
-        for param in feature_extractor.parameters():
+        for param in model.parameters():
             param.require_grad = False
 
-        self.feature = feature_extractor
+        num_features = model.classifier[2].in_features
+        model.classifier[2] = nn.Linear(num_features, embedding_vector_size)
+        self.model = nn.Sequential(model)
 
     def forward(self, x):
 
-        feature = self.feature(x)
-        flatten_feature = feature.reshape(feature.size(0), -1)
-        return flatten_feature
+        output = self.model(x)
+        output = output.view(output.size()[0], -1)
+        return output
 
 
 class resnet18_embedding(nn.Module):
 
-    def __init__(self):
+    def __init__(self, embedding_vector_size):
 
         super(resnet18_embedding, self).__init__()
 
         model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-        self.model = model
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        num_features = model.fc.in_features
+        model.fc = nn.Linear(num_features, embedding_vector_size)
+        self.model = nn.Sequential(model)
 
     def forward(self, x):
 
@@ -79,15 +87,20 @@ class resnet18_embedding(nn.Module):
 
 class contrastive_resnet18(nn.Module):
 
-    def __init__(self, weight_path):
+    def __init__(self, weight_path, embedding_vector_size):
 
         super(contrastive_resnet18, self).__init__()
 
         MODEL_PATH = weight_path
-
         model = resnet18(weights=None)
         model.load_state_dict(torch.load(MODEL_PATH), strict=True)
-        self.model = model
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        num_features = model.fc.in_features
+        model.fc = nn.Linear(num_features, embedding_vector_size)
+        self.model = nn.Sequential(model)
 
     def forward(self, x):
 
@@ -98,15 +111,31 @@ class contrastive_resnet18(nn.Module):
 
 class resnet50_embedding(nn.Module):
 
-    def __init__(self):
+    def __init__(self, embedding_vector_size):
 
         super(resnet50_embedding, self).__init__()
 
         model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-        self.model = model
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        num_features = model.fc.in_features
+        model.fc = nn.Linear(num_features, embedding_vector_size)
+        self.model = nn.Sequential(model)
 
     def forward(self, x):
 
         output = self.model(x)
         output = output.view(output.size()[0], -1)
         return output
+
+# %%
+
+# model = contrastive_resnet18(weight_path, 1000)
+# model.cuda()
+# img = torch.randn(2, 3, 224, 224).cuda()
+# output = model(img)
+#
+# print(output.shape)
+
