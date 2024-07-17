@@ -13,9 +13,9 @@ KRAG is a self-attention hierarchical graph multiple instance learning pipeline,
 - **Segmentation.** A automated tissue segmentation step, using adaptive thresholding to segment tissue areas on the WSIs.
 - **Patching.** After segmentation, the tissue area is divided into patches at a size chosen by the user (eg. 224 x 224), which can be overlapping or non-overlapping.
 - **Coordinates extraction.** For each patch, the (x,y)-coordinates are saved to a .csv file from the tissue segmentation.
-- **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into $[1 \times 1024]$ feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.
-- **Adjacency matrix construction.** The patch coordinates are used to create a region Adjacency matrix $A_{RAG}$, where edges existing between spatially adjacent patches are 1 if they are spatially adjacent and 0 otherwise. The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a KNN Adjacency matrix $A_{KNN}$ is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
-- **Graph construction** The Adjacency matrices A_{RA} and $A_{KNN}$ are summed, with shared edges reset to 1, creating an Adjacency matrix $A_{KRAG}$. For each patient a directed, unweighted KNN+RA graph is initialised using the adjacency matrix $A_{KRAG}$, combining both local - RA - and global - KNN - information.
+- **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into [1 \times 1024] feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.
+- **Adjacency matrix construction.** The patch coordinates are used to create a region Adjacency matrix A_{RAG}, where edges existing between spatially adjacent patches are 1 if they are spatially adjacent and 0 otherwise. The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a KNN Adjacency matrix A_{KNN} is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
+- **Graph construction** The Adjacency matrices A_{RA} and A_{KNN} are summed, with shared edges reset to 1, creating an Adjacency matrix A_{KRAG}. For each patient a directed, unweighted KNN+RA graph is initialised using the adjacency matrix A_{KRAG}, combining both local - RA - and global - KNN - information.
 - **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.
 - **Hierarchical Graph classification.** The KRAG is successively passed through four Graph Attention Network layers (GAT) and SAGPooling layers. The SAGPooling readouts from each layer are concatenated and passed through three MLP layers. This concatenated vector is passed through a self-attention head and finally classified.
 - **Heatmap generation.** Sagpool scores.
@@ -49,7 +49,7 @@ During preprocessing, the following steps are performed: **tissue segmentation**
 
 #### Arguments
 
-All argumuments used to run the code are defined using `Argument parser` and can be modified using the command line.
+All arguments used to run the code are defined using `Argument parser` and can be modified using the command line.
 
 #### Data Directory Structure
 
@@ -73,13 +73,15 @@ Preprocessing can be run using the following command:
 ```bash
 python main.py --preprocess --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
 ```
-`--preprocess` will create 5 new folders: results, dictionaries, masks, contours and thumbnails.
-
-- `results` contains the patches folder, containing all the extracted patches, as well as the `extracted_patches.csv` file which contains all the patient_IDs, filenames, coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
+`--preprocess` will create 5 new folders: results, dictionaries, masks, contours.
 
 - `masks` contains all the downsampled binary masks obtained during tissue segmentation. 
 
-- `Contours` and `thumbnails` contain downsampled WSIs with mask contours and thumbnails of the WSIs as a sanity check. You can easily check you're segmenting the right thing and that there's no issues with the WSIs themselves.
+- `Contours` contain downsampled WSIs with mask contours drawn on thumbnails of the WSIs as a sanity check. You can easily check you're segmenting the right thing and that there's no issues with the WSIs themselves.
+
+- `results` contains the patches folder, containing all the extracted patches, as well as the `extracted_patches.csv` file which contains all the patient_IDs, filenames, coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
+
+- `dictionaries` contains pickled dictionaries of the embedded feature vectors, graphs with random walk positional encodings for each patient.
 
 Alternatively, each step can be run separately (if you already have binary masks or embedded feature vectors for example) using the following commands:
 
@@ -89,6 +91,45 @@ python main.py --embedding # Feature extraction and graph construction
 python main.py --compute_rwpe # Random walk positional encoding
 ```
 
+### Training & Testing
 
 
+#### Model Training
 
+Training is run using the following command:
+
+```bash
+python main.py --train --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
+```
+
+The results will be stored in the `output` directory. There you will find training/validation logs for each fold + summary statistics, as well as model weights in the `checkpoints` folder.
+
+Additional training parameters can be set using command-line arguments. For a full list of options, run:
+
+```bash
+python main.py --help
+```
+
+#### Model Testing
+
+Testing is run on the different hold-out folds using the following command:
+
+```bash
+python main.py --test --directory path/to/output --dataset_name dataset_name
+```
+
+This will test the corresponding model weights on the hold-out test set and store final results in the `output` directory.
+
+### Heatmap Generation
+
+Heatmaps can be generated using the following command:
+
+```bash
+python main.py --heatmap --directory path/to/output --dataset_name dataset_name --path_to_patches path/to/patches --heatmap_path path/to/save/heatmaps
+```
+
+This will generate smoothed heatmaps for the test folds using the trained model weights and store them in the `heatmap_path` directory. Heatmaps maps can be examined overall or for each layer of the model, as shown below:
+
+![](multi_stain.png)
+
+![](heatmap_per_layer.png)

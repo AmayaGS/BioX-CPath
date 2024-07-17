@@ -53,7 +53,7 @@ def train_krag(args):
 
     current_directory = args.directory
     run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
-    results = os.path.join(current_directory, "results/" + run_results_folder)
+    results = os.path.join(current_directory, "output/" + run_results_folder)
     checkpoints = results + "/checkpoints"
     os.makedirs(results, exist_ok = True)
     os.makedirs(checkpoints, exist_ok = True)
