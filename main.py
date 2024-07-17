@@ -122,6 +122,11 @@ def main(args):
         train_krag(args)
         print("Done training")
 
+    if args.test:
+        print("Running testing")
+        test_krag(args)
+        print("Done testing")
+
     if args.heatmap:
         print("Running heatmap generation for WSI")
         # Run heatmap generation for WSI
