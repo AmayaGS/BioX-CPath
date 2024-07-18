@@ -30,7 +30,7 @@ class histoDataset(Dataset):
             self.stain_types = df['Stain_type'].tolist()
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.filepaths)
 
     def __getitem__(self, idx):
 

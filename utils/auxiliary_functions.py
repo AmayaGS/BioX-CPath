@@ -8,6 +8,9 @@ Created on Tue Jan 24 14:03:24 2023
 
 # Misc
 import os
+import logging
+import sys
+
 import random
 import numpy as np
 
@@ -20,6 +23,36 @@ from torch import Tensor
 
 # PyG
 from torch_geometric.utils import scatter
+
+
+
+def setup_logger(log_file_path):
+    # Create a logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.handlers = []  # Clear existing handlers
+
+    # Create a file handler
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.INFO)
+
+    # Create a console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+
+    # Create a formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # Add the handlers to the logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
 
 
 class Accuracy_Logger(object):

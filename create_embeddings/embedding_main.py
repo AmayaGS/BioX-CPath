@@ -46,14 +46,9 @@ def patch_embedding(args):
 
     df = pd.merge(extracted_patches, patient_labels, on= args.patient_id)
 
-    if args.multistain:
-        df = df[df['Stain_type'] == args.stain_type]
-        df_labels = df.drop_duplicates(subset= args.patient_id)
-        ids = list(df_labels[args.patient_id])
-    else:
-      # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist
-        df_labels = df.drop_duplicates(subset= args.patient_id)
-        ids = list(df_labels[args.patient_id])
+    # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist
+    df_labels = df.drop_duplicates(subset= args.patient_id)
+    ids = list(df_labels[args.patient_id])
 
     sss_dict_name = args.directory + f"/train_test_strat_splits_{args.dataset_name}.pkl"
     if not os.path.exists(sss_dict_name):
@@ -65,19 +60,19 @@ def patch_embedding(args):
 
     if args.embedding_net == 'resnet18':
         # Load weights for resnet18
-        embedding_net = resnet18_embedding()
+        embedding_net = resnet18_embedding(embedding_vector_size=args.embedding_vector_size)
     if args.embedding_net == 'ssl_resnet18':
         # Load weights for resnet18
-        embedding_net = contrastive_resnet18(args.embedding_weights)
+        embedding_net = contrastive_resnet18(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'resnet50':
         # Load weights for convnext
-        embedding_net = resnet50_embedding()
+        embedding_net = resnet50_embedding(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'vgg16':
         # Load weights for vgg16
         embedding_net = VGG_embedding(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'convnext':
         # Load weights for convnext
-        embedding_net = convNext()
+        embedding_net = convNext(embedding_vector_size=args.embedding_vector_size)
 
     if use_gpu:
          embedding_net.cuda()

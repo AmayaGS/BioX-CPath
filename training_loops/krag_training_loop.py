@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Mar  3 17:34:24 2023
+Created on Fri Mar 3 17:34:24 2023
 
 @author: AmayaGS
 """
@@ -10,22 +10,18 @@ import os.path
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import numpy as np
-
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve, classification_report, confusion_matrix
 from sklearn.preprocessing import label_binarize
-from sklearn.metrics import auc as calc_auc
 
 import torch
 from torch_geometric.data import Data
 
-from utils.auxiliary_functions import Accuracy_Logger
+from utils.auxiliary_functions import Accuracy_Logger, setup_logger
 
 use_gpu = torch.cuda.is_available()
 
 import gc
 gc.enable()
-
 
 
 def l1_regularization(model, l1_norm):
@@ -55,6 +51,156 @@ def randomly_shuffle_graph(data, seed=None):
     )
 
     return shuffled_data
+
+
+def train_epoch(graph_net, train_loader, loss_fn, optimizer):
+
+    train_loss = 0
+    train_correct = 0
+    train_total = 0
+
+    graph_net.train()
+
+    for patient_ID, graph_object in train_loader.dataset.items():
+        data, label, _, _ = graph_object
+        if use_gpu:
+            data, label = data.cuda(), label.cuda()
+
+        logits, Y_prob = graph_net(data)
+        loss = loss_fn(logits, label)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        train_loss += loss.item()
+        predicted = Y_prob.argmax(dim=1)
+        train_total += label.size(0)
+        train_correct += (predicted == label).sum().item()
+
+        # Explicit deletion of variables
+        del graph_object, data, label, logits, Y_prob, predicted, loss
+        # Clear CUDA cache if using GPU
+        if use_gpu:
+            torch.cuda.empty_cache()
+        # Garbage collection
+        gc.collect()
+
+    return train_loss / len(train_loader.dataset), train_correct / train_total
+
+
+def evaluate_model(graph_net, val_loader, loss_fn, n_classes):
+
+    val_loss = 0
+    val_correct = 0
+    val_total = 0
+    all_probs = []
+    all_labels = []
+
+    graph_net.eval()
+
+    with torch.no_grad():
+        for patient_ID, graph_object in val_loader.dataset.items():
+            data, label, _, _ = graph_object
+            if use_gpu:
+                data, label = data.cuda(), label.cuda()
+
+            logits, Y_prob = graph_net(data)
+            loss = loss_fn(logits, label)
+            val_loss += loss.item()
+
+            _, predicted = torch.max(Y_prob, 1)
+            val_total += label.size(0)
+            val_correct += (predicted == label).sum().item()
+
+            all_probs.append(Y_prob.cpu().numpy())
+            all_labels.append(label.cpu().numpy())
+
+            del graph_object, data, label, logits, Y_prob, predicted, loss
+            # Clear CUDA cache if using GPU
+            if use_gpu:
+                torch.cuda.empty_cache()
+            # Garbage collection
+            gc.collect()
+
+    val_loss /= len(val_loader.dataset)
+    val_accuracy = val_correct / val_total
+
+    all_probs = np.concatenate(all_probs, axis=0)
+    all_labels = np.concatenate(all_labels)
+
+    if n_classes == 2:
+        val_auc = roc_auc_score(all_labels, all_probs[:, 1])
+    else:
+        binary_labels = label_binarize(all_labels, classes=range(n_classes))
+        val_auc = roc_auc_score(binary_labels, all_probs, average='macro', multi_class='ovr')
+
+    predicted_labels = np.argmax(all_probs, axis=1)
+    conf_matrix = confusion_matrix(all_labels, np.argmax(all_probs, axis=1))
+    class_report = classification_report(all_labels, predicted_labels, zero_division=0)
+
+    return val_loss, val_accuracy, val_auc, conf_matrix, class_report
+
+
+def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging_file_path, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
+
+    since = time.time()
+    best_val_acc = 0.
+    best_val_AUC = 0.
+
+    results_dict = {
+        'train_loss': [], 'train_accuracy': [],
+        'val_loss': [], 'val_accuracy': [], 'val_auc': []
+    }
+
+    for epoch in range(num_epochs):
+        train_loss, train_accuracy = train_epoch(graph_net, train_loader, loss_fn, optimizer)
+        val_loss, val_accuracy, val_auc, conf_matrix, class_report = evaluate_model(graph_net, val_loader, loss_fn, n_classes)
+        logger = setup_logger(logging_file_path)
+
+        results_dict['train_loss'].append(train_loss)
+        results_dict['train_accuracy'].append(train_accuracy)
+        results_dict['val_loss'].append(val_loss)
+        results_dict['val_accuracy'].append(val_accuracy)
+        results_dict['val_auc'].append(val_auc)
+
+        # print(f"Epoch {epoch+1}/{num_epochs}")
+        # print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}")
+        # print(f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}, Val AUC: {val_auc:.4f}")
+        # print("Confusion Matrix:")
+        # print(conf_matrix)
+        # print("Classification Report:")
+        # print(class_report)
+
+        logger.info(f"\n{'=' * 50}")
+        logger.info(f"Epoch {epoch + 1}/{num_epochs}")
+        logger.info(f"Training Loss: {train_loss:.4f}")
+        logger.info(f"Training Accuracy: {train_accuracy:.4f}")
+        logger.info(f"Validation Loss: {val_loss:.4f}")
+        logger.info(f"Validation Accuracy: {val_accuracy:.4f}")
+        logger.info(f"Validation AUC: {val_auc:.4f}")
+        logger.info(f"{conf_matrix}")
+        logger.info(f"{class_report}")
+
+        if val_accuracy >= best_val_acc:
+            best_val_acc = val_accuracy
+
+            if checkpoint:
+                checkpoint_weights = checkpoint_path + str(epoch) + ".pth"
+                torch.save(graph_net.state_dict(), checkpoint_weights)
+
+        if val_auc >= best_val_AUC:
+            best_val_AUC = val_auc
+
+            if checkpoint:
+                checkpoint_weights = checkpoint_path + str(epoch) + ".pth"
+                torch.save(graph_net.state_dict(), checkpoint_weights)
+
+    elapsed_time = time.time() - since
+
+    print()
+    print("Training completed in {:.0f}m {:.0f}s".format(elapsed_time // 60, elapsed_time % 60))
+
+    return graph_net, results_dict, best_val_acc, best_val_AUC
 
 
 def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimizer, lr_scheduler, l1_norm, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
@@ -212,16 +358,16 @@ def train_graph_multi_wsi(graph_net, train_loader, test_loader, loss_fn, optimiz
         val_accuracy_list.append(val_accuracy.item())
 
         if n_classes == 2:
-            prob =  np.stack(prob, axis=1)[0]
+            prob = np.stack(prob, axis=1)[0]
             val_auc = roc_auc_score(labels, prob[:, 1])
-            aucs = []
         else:
+            binary_labels = label_binarize(labels, classes=range(n_classes))
+            prob = np.stack(prob, axis=0)
+
             aucs = []
-            binary_labels = label_binarize(labels, classes=[i for i in range(n_classes)])
-            prob =  np.stack(prob, axis=1)[0]
-            for class_idx in range(n_classes):
+            for i in range(n_classes):
                 if class_idx in labels:
-                    fpr, tpr, _ = roc_curve(binary_labels[:, class_idx], prob[:, class_idx])
+                    fpr, tpr, _ = roc_curve(binary_labels[:, i], prob[:, i])
                     aucs.append(calc_auc(fpr, tpr))
                 else:
                     aucs.append(float('nan'))

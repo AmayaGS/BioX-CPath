@@ -14,10 +14,10 @@ parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents
 parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
 parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
 parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
-parser.add_argument('--coverage', type=float, default=0.5, help='Coverage (default: 0.3)')
+parser.add_argument('--coverage', type=float, default=0.4, help='Coverage (default: 0.3)')
 parser.add_argument('--slide_level', type=int, default=2, help='Slide level (default: 2)')
 parser.add_argument('--mask_level', type=int, default=2, help='Slide level (default: 3)')
-parser.add_argument('--unet', action='store_true', help='Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')
+parser.add_argument('--unet', action='store_true', help='WIP, do not use yet - Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')
 parser.add_argument('--unet_weights', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\UNet_512_1.pth.tar", help='Path to model checkpoints')
 parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size (default: 10)')
 parser.add_argument('--patient_ID_parsing', type=str, default='img.split("_")[0]', help='String parsing to obtain patient ID from image filename')
@@ -34,7 +34,7 @@ parser.add_argument("--stratified_splits", type=int, default=5, help="Number of 
 parser.add_argument("--embedding_net", type=str, default="resnet18", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50'], help="feature extraction network used")
 parser.add_argument("--embedding_weights", type=str, default=r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\tenpercent_resnet18.pt", help="Path to embedding weights")
 parser.add_argument("--train_fraction", type=float, default=0.8, help="Train fraction")
-parser.add_argument("--val_fraction", type=float, default=0.15, help="Validation fraction")
+parser.add_argument("--val_fraction", type=float, default=0.20, help="Validation fraction")
 parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
 parser.add_argument("--n_classes", type=int, default=2, help="Number of classes")
 parser.add_argument("--slide_batch", type=int, default=1, help="Slide batch size - default 1")
@@ -42,7 +42,7 @@ parser.add_argument("--num_workers", type=int, default=0, help="Number of worker
 parser.add_argument('--stain_type', type=str, default='all', help='Type of stain used.')
 
 #pre-compute Random Walk positional encoding on the graph
-parser.add_argument("--encoding_size", type=int, default=5, help="Size Random Walk positional encoding")
+parser.add_argument("--encoding_size", type=int, default=24, help="Size Random Walk positional encoding")
 
 #self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level"
 parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
@@ -52,7 +52,7 @@ parser.add_argument("--learning_rate", type=float, default=0.00001, help="Learni
 parser.add_argument('--attention', action='store_true', help='This parameter will result in using an attention mechanism after the graph pooling layer')
 parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
 parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
-parser.add_argument("--num_epochs", type=int, default=50, help="Number of training epochs")
+parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
 parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
 parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
 parser.add_argument("--checkpoint", action="store_true", default=True, help="Enables checkpointing of GNN weights.")
@@ -73,6 +73,7 @@ parser.add_argument("--segmentation", action='store_true', help="Run tissue segm
 parser.add_argument("--embedding", action='store_true', help="Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
 parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph")
 parser.add_argument("--train", action='store_true', help="Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
+parser.add_argument("--test", action='store_true', help="Run testing")
 parser.add_argument("--heatmap", action='store_true', help="Run heatmap generation for WSI, for each layer of the GNN or all together.")
 
 args = parser.parse_args()

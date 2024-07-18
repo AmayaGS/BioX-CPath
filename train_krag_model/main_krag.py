@@ -23,7 +23,7 @@ import torch.optim as optim
 from torch_geometric.loader import DataLoader
 
 # KRAG functions
-from training_loops.krag_training_loop import train_graph_multi_wsi
+from training_loops.krag_training_loop import train_graph
 from utils.auxiliary_functions import seed_everything
 from models.krag_model import KRAG_Classifier
 
@@ -107,11 +107,13 @@ def train_krag(args):
         val_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
         #test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
-        _, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        logging_file_path = results + "/" + run_results_folder + "_fold_" + str(fold_idx) + "_logging_file.txt"
+        #_, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        _, results_dict, best_acc, best_AUC = train_graph(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, logging_file_path, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
         # save results to csv file
-        mean_best_acc.append(best_acc.item())
-        mean_best_AUC.append(best_AUC.item())
+        mean_best_acc.append(best_acc)
+        mean_best_AUC.append(best_AUC)
 
         df_results = pd.DataFrame.from_dict(results_dict)
         df_results.to_csv(results + "/" + run_results_folder + "_fold_" + str(fold_idx) + ".csv", index=False)

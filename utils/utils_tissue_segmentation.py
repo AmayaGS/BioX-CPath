@@ -12,6 +12,7 @@ os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = str(pow(2,40))
 
 import cv2
 import numpy as np
+import pandas as pd
 import csv
 import matplotlib.pyplot as plt
 
@@ -187,13 +188,20 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(patches_dir, exist_ok=True)
 
+    # Load existing extracted_patches.csv if it exists
+    if os.path.exists(filename):
+        existing_patches = pd.read_csv(filename)
+        processed_images = set(existing_patches['Filename'].unique())
+    else:
+        processed_images = set()
+
     with open(filename, "a") as file:
         fileEmpty = os.stat(filename).st_size == 0
 
         if multistain:
-            headers  = ['Patient_ID', 'Stain_type', 'Filename', 'Patch_name', 'Patch_coordinates', 'File_location']
+            headers = ['Patient_ID', 'Stain_type', 'Filename', 'Patch_name', 'Patch_coordinates', 'File_location']
         else:
-            headers  = ['Patient_ID', 'Filename', 'Patch_name', 'Patch_coordinates', 'File_location']
+            headers = ['Patient_ID', 'Filename', 'Patch_name', 'Patch_coordinates', 'File_location']
 
         writer = csv.DictWriter(file, delimiter=',', lineterminator='\n', fieldnames=headers)
         if fileEmpty:
@@ -207,13 +215,17 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
             model.load_state_dict(checkpoint['state_dict'], strict=True)
 
         for img in images:
-
             # if img != 'patient_103_node_1.tif': # special case for camelyon17 - image is corrupted # TODO add exception if image is corrupted? probably needs to be caught downstream
-
             img_path = os.path.join(image_dir, img)
             file_type = img.split(".")[-1]
             len_file_type = len(file_type) + 1
             img_name = img[:-len_file_type]
+
+            # Skip if this image has already been processed
+            if img_name in processed_images:
+                print(f"Skipping {img_name} as it has already been processed.")
+                continue
+
             patient_id = eval(name_parsing)
             if multistain:
                 stain_type = eval(stain_parsing)
@@ -226,11 +238,13 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
             width = slide.level_dimensions[slide_level][0]
             height = slide.level_dimensions[slide_level][1]
             downsample = int(slide.level_downsamples[slide_level])
+            lowest_level = slide.level_count - 1
+
             print(f"Processing WSI: {img_name}, height: {height}, width: {width}, slide level: {slide_level}, downsample factor: {downsample}")
 
             if not os.path.exists(thumbnail_path + '.png'):
 
-                thumbnail = np.asarray(slide.read_region((0, 0), 5, (slide.level_dimensions[5][0], slide.level_dimensions[5][1])).convert('RGB'))
+                thumbnail = np.asarray(slide.read_region((0, 0), lowest_level, (slide.level_dimensions[lowest_level][0], slide.level_dimensions[lowest_level][1])).convert('RGB'))
                 plt.imsave(thumbnail_path + '.png', thumbnail)
 
             if os.path.exists(mask_path):
@@ -273,11 +287,9 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
                         batch_coords.append(coords)
 
                     for (pred_mask, coords) in zip(batch, batch_coords):
-
                         white_pixels = np.count_nonzero(pred_mask)
 
                         if (white_pixels / patch_size ** 2) > coverage:
-
                             img = np.asarray(slide.read_region((coords[2] * downsample, coords[0] * downsample), slide_level, (patch_size, patch_size)).convert('RGB'))
 
                             patch_loc_str = f"_row1={coords[0]}_row2={coords[1]}_col1={coords[2]}_col2={coords[3]}"
@@ -288,7 +300,6 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
                             plt.imsave(file_location, img)
 
                             if multistain:
-
                                 data = {
                                 'Patient_ID': patient_id,
                                 'Filename': img_name,
@@ -301,7 +312,6 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
                                 writer.writerow(data)
 
                             else:
-
                                 data = {
                                         'Patient_ID': patient_id,
                                         'Filename': img_name,
@@ -315,3 +325,7 @@ def save_patches(image_dir, output_dir, slide_level, mask_level, patch_size, une
                             batch = []
                             batch_coords = []
                             count = 1
+
+            processed_images.add(img_name)
+
+    print("Done processing all images.")
