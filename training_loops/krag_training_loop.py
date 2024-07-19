@@ -7,6 +7,7 @@ Created on Fri Mar 3 17:34:24 2023
 
 import time
 import os.path
+from collections import defaultdict
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import numpy as np
@@ -17,6 +18,7 @@ import torch
 from torch_geometric.data import Data
 
 from utils.auxiliary_functions import Accuracy_Logger, setup_logger
+from utils.plotting_functions import plot_training_results
 
 use_gpu = torch.cuda.is_available()
 
@@ -53,11 +55,13 @@ def randomly_shuffle_graph(data, seed=None):
     return shuffled_data
 
 
-def train_epoch(graph_net, train_loader, loss_fn, optimizer):
+def train_epoch(graph_net, train_loader, loss_fn, optimizer, n_classes):
 
     train_loss = 0
     train_correct = 0
     train_total = 0
+    class_correct = defaultdict(int)
+    class_total = defaultdict(int)
 
     graph_net.train()
 
@@ -77,6 +81,11 @@ def train_epoch(graph_net, train_loader, loss_fn, optimizer):
         train_total += label.size(0)
         train_correct += (predicted == label).sum().item()
 
+        # Count correct predictions for each class
+        for i in range(n_classes):
+            class_correct[i] += ((predicted == label) & (label == i)).sum().item()
+            class_total[i] += (label == i).sum().item()
+
         # Explicit deletion of variables
         del graph_object, data, label, logits, Y_prob, predicted, loss
         # Clear CUDA cache if using GPU
@@ -85,7 +94,7 @@ def train_epoch(graph_net, train_loader, loss_fn, optimizer):
         # Garbage collection
         gc.collect()
 
-    return train_loss / len(train_loader.dataset), train_correct / train_total
+    return train_loss / len(train_loader.dataset), train_correct / train_total, class_correct, class_total
 
 
 def evaluate_model(graph_net, val_loader, loss_fn, n_classes):
@@ -141,7 +150,7 @@ def evaluate_model(graph_net, val_loader, loss_fn, n_classes):
     return val_loss, val_accuracy, val_auc, conf_matrix, class_report
 
 
-def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging_file_path, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
+def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging_file_path, fold, n_classes, num_epochs, checkpoint, checkpoint_path="PATH_checkpoints"):
 
     since = time.time()
     best_val_acc = 0.
@@ -153,7 +162,7 @@ def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging
     }
 
     for epoch in range(num_epochs):
-        train_loss, train_accuracy = train_epoch(graph_net, train_loader, loss_fn, optimizer)
+        train_loss, train_accuracy, class_correct, class_total = train_epoch(graph_net, train_loader, loss_fn, optimizer, n_classes)
         val_loss, val_accuracy, val_auc, conf_matrix, class_report = evaluate_model(graph_net, val_loader, loss_fn, n_classes)
         logger = setup_logger(logging_file_path)
 
@@ -171,15 +180,14 @@ def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging
         # print("Classification Report:")
         # print(class_report)
 
-        logger.info(f"\n{'=' * 50}")
+        logger.info(f"\n{'=' * 25} Split {fold} {'=' * 25}")
         logger.info(f"Epoch {epoch + 1}/{num_epochs}")
-        logger.info(f"Training Loss: {train_loss:.4f}")
-        logger.info(f"Training Accuracy: {train_accuracy:.4f}")
-        logger.info(f"Validation Loss: {val_loss:.4f}")
-        logger.info(f"Validation Accuracy: {val_accuracy:.4f}")
-        logger.info(f"Validation AUC: {val_auc:.4f}")
-        logger.info(f"{conf_matrix}")
-        logger.info(f"{class_report}")
+        logger.info(f"Training Loss: {train_loss:.4f}, Training Accuracy: {train_accuracy:.4f}")
+        for i in range(n_classes):
+            logger.info(f"Class {i}: {class_correct[i]}/{class_total[i]}")
+        logger.info(f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.4f}, Validation AUC: {val_auc:.4f}")
+        logger.info(f"\n{conf_matrix}")
+        logger.info(f"\n{class_report}")
 
         if val_accuracy >= best_val_acc:
             best_val_acc = val_accuracy
@@ -195,10 +203,13 @@ def train_graph(graph_net, train_loader, val_loader, loss_fn, optimizer, logging
                 checkpoint_weights = checkpoint_path + str(epoch) + ".pth"
                 torch.save(graph_net.state_dict(), checkpoint_weights)
 
+    path_to_save_plot = logging_file_path.split("/")[0] + "/" + logging_file_path.split("/")[1]
+    plot_training_results(results_dict, fold, path_to_save_plot)
+
     elapsed_time = time.time() - since
 
     print()
-    print("Training completed in {:.0f}m {:.0f}s".format(elapsed_time // 60, elapsed_time % 60))
+    print("Training & validation completed in {:.0f}m {:.0f}s".format(elapsed_time // 60, elapsed_time % 60))
 
     return graph_net, results_dict, best_val_acc, best_val_AUC
 

@@ -8,6 +8,8 @@ Created on Wed Mar  6 12:43:55 2024
 # Misc
 import os
 import os.path
+import time
+
 import numpy as np
 import pandas as pd
 import statistics
@@ -25,6 +27,7 @@ from torch_geometric.loader import DataLoader
 # KRAG functions
 from training_loops.krag_training_loop import train_graph
 from utils.auxiliary_functions import seed_everything
+from utils.plotting_functions import plot_averaged_results
 from models.krag_model import KRAG_Classifier
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -90,7 +93,9 @@ def train_krag(args):
                 test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 testing_folds.append(test_dict)
 
-    for fold_idx, (train_fold, val_folds) in enumerate(zip(training_folds, validation_folds)):
+    since = time.time()
+    all_results = []
+    for fold_idx, (train_fold, val_fold) in enumerate(zip(training_folds, validation_folds)):
 
         # initialising new graph, loss, optimiser between folds
         graph_net = KRAG_Classifier(args.embedding_vector_size, hidden_dim= args.hidden_dim, num_classes= args.n_classes, heads= args.heads, pooling_ratio= args.pooling_ratio, walk_length= args.encoding_size, conv_type= args.convolution)
@@ -104,19 +109,24 @@ def train_krag(args):
         sampler = minority_sampler(train_fold)
 
         train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
-        val_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
+        val_graph_loader = DataLoader(val_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
         #test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
         logging_file_path = results + "/" + run_results_folder + "_fold_" + str(fold_idx) + "_logging_file.txt"
         #_, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
-        _, results_dict, best_acc, best_AUC = train_graph(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, logging_file_path, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
+        _, results_dict, best_acc, best_AUC = train_graph(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, logging_file_path, fold_idx, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
+        all_results.append(results_dict)
         # save results to csv file
         mean_best_acc.append(best_acc)
         mean_best_AUC.append(best_AUC)
 
         df_results = pd.DataFrame.from_dict(results_dict)
         df_results.to_csv(results + "/" + run_results_folder + "_fold_" + str(fold_idx) + ".csv", index=False)
+
+    plot_averaged_results(all_results, results + "/")
+    elapsed_time = time.time() - since
+    print("Full Training & validation completed in {:.0f}m {:.0f}s".format(elapsed_time // 60, elapsed_time % 60))
 
     average_best_acc = sum(mean_best_acc) / len(mean_best_acc)
     std_best_acc = statistics.pstdev(mean_best_acc)
