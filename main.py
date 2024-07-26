@@ -1,9 +1,9 @@
 import argparse
 
-from tissue_segmentation.main_tissue_segmentation import tissue_segmentation
+from tissue_segmentation.tissue_segmentation import tissue_segmentation
 from create_embeddings.embedding_main import patch_embedding
 from create_rwpe.compute_rwpe_on_graph import compute_rwpe
-from train_krag_model.main_krag import train_krag
+from train_krag_model.main_krag import train_krag, test_krag
 from create_heatmaps.main_krag_heatmap import heatmap_generation
 
 parser = argparse.ArgumentParser(description="Input arguments for applying KRAG to Whole Slide Images")
@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="Input arguments for applying KRAG 
 # Input arguments for tissue segmentation and patching of Whole Slide Images
 parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\R4RA_slides", help='Input data directory')
 parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_RA", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
-parser.add_argument("--dataset_name", type=str, default="RA", choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
+parser.add_argument('--dataset_name', type=str, default='RA', choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
 parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
 parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
 parser.add_argument('--coverage', type=float, default=0.4, help='Coverage (default: 0.3)')
@@ -23,7 +23,7 @@ parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size
 parser.add_argument('--patient_ID_parsing', type=str, default='img.split("_")[0]', help='String parsing to obtain patient ID from image filename')
 parser.add_argument('--stain_parsing', type=str, default='img.split("_")[1]', help='String parsing to obtain stain type from image filename')
 parser.add_argument('--multistain', action= 'store_true', default=False, help='Whether the dataset contains multiple types of staining. Will generate extracted_patches.csv with stain type info.')
-parser.add_argument("--seed", type=int, default=42, help="Random seed")
+parser.add_argument('--seed', type=int, default=42, help="Random seed")
 
 #Feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag].
 parser.add_argument("--label", type=str, default='label', help="Name of the target label in the metadata file")
@@ -59,12 +59,12 @@ parser.add_argument("--checkpoint", action="store_true", default=True, help="Ena
 parser.add_argument("--l1_norm", type=int, default=0, help="L1-norm to regularise loss function")
 
 # heatmap generation for WSI
-parser.add_argument("--path_to_patches", type=str, default="/data/scratch/wpw030/KRAG/results/patches/", help="Location of patches")
-parser.add_argument("--heatmap_path", type=str, default="/data/scratch/wpw030/KRAG/results/heatmaps/", help="Location of saved heatmap figs")
-parser.add_argument("--checkpoint_weights", type=str, default="/data/scratch/wpw030/KRAG/", help="Location of trained model weights.")
-parser.add_argument("--test_fold", type=str, default="Fold_9", help="test fold")
-parser.add_argument("--test_ids", action='store_true', help="Specific IDs to create heatmap on, rather than test fold.")
-parser.add_argument("--slide_name", type=str, default="/data/scratch/wpw030/KRAG/slide1", help="Location of slide which to create heatmap for.")
+parser.add_argument("--path_to_patches", type=str, default=r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\results_2\patches", help="Location of patches")
+# parser.add_argument("--heatmap_path", type=str, default=r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA", help="Location of saved heatmap figs")
+parser.add_argument("--checkpoint_weights", type=str, default=r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\output\graph_krag_GAT_PE_24_resnet18_RA_42_2_0.7_1e-05_1_all_L1_0\checkpoints", help="Location of trained model weights.")
+parser.add_argument("--test_fold", type=int, default=0, help="Test fold to generate heatmaps for")
+parser.add_argument("--test_ids", nargs="+", help="Specific test IDs to generate heatmaps for")
+parser.add_argument("--specific_ids", action="store_true", help="Generate heatmaps for specific test IDs")
 parser.add_argument("--per_layer", action='store_true', help="If called, will create heatmaps for each layer of the GNN.")
 
 # General arguments to determine if running preprocessing or training.

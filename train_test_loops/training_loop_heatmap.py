@@ -5,20 +5,7 @@ Created on Fri Mar  3 17:34:24 2023
 @author: AmayaGS
 """
 
-import time
-import os, os.path
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
-import numpy as np
-
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import roc_curve, roc_auc_score
-from sklearn.preprocessing import label_binarize
-from sklearn.metrics import auc as calc_auc
-
 import torch
-
-from utils.auxiliary_functions import Accuracy_Logger
 
 use_gpu = torch.cuda.is_available()
 
@@ -26,30 +13,31 @@ import gc
 gc.enable()
 
 
-
-def slide_att_scores(graph_net, test_loader, patient_ID, loss_fn, n_classes=2):
-
-
+def slide_att_scores(graph_net, test_loader, patient_ID, loss_fn, n_classes):
     graph_net.eval()
-
     attention_scores= {}
 
-    data = test_loader.dataset[0]
-    label = test_loader.dataset[1]
-    files = test_loader.dataset[2]
-    filenames = test_loader.dataset[3]
+    data = test_loader.dataset[0][0]
+    label = test_loader.dataset[0][1]
+    metadata = test_loader.dataset[0][2]
+    filenames = metadata['filenames']
 
     with torch.no_grad():
         if use_gpu:
             data, label = data.cuda(), label.cuda()
-        else:
-            data, label = data, label
 
-    logits, Y_prob, all_patches = graph_net(data, filenames)
+    logits, Y_prob, all_patches_per_layer, all_patches_cumulative = graph_net(data, filenames)
 
-    attention_scores[patient_ID] = [all_patches]
+    attention_scores[patient_ID] = {
+        'per_layer': all_patches_per_layer,
+        'cumulative': all_patches_cumulative
+    }
 
     Y_hat = Y_prob.argmax(dim=1)
+
+    return attention_scores, label, Y_hat
+
+
     # test_acc_logger.log(Y_hat, label)
 
     # test_acc += torch.sum(Y_hat == label.data)
@@ -86,33 +74,3 @@ def slide_att_scores(graph_net, test_loader, patient_ID, loss_fn, n_classes=2):
         #plt.title('Graph with Node Colors Based on all Scores')
         #plt.axis('off')  # Turn off axis labels
         #plt.show()
-
-    return attention_scores, label, Y_hat
-
-
-
-def slide_att_scores_per_layer(graph_net, test_loader, patient_ID, loss_fn, n_classes=2):
-
-
-    graph_net.eval()
-
-    attention_scores= {}
-
-    data = test_loader.dataset[0]
-    label = test_loader.dataset[1]
-    files = test_loader.dataset[2]
-    filenames = test_loader.dataset[3]
-
-    with torch.no_grad():
-        if use_gpu:
-            data, label = data.cuda(), label.cuda()
-        else:
-            data, label = data, label
-
-    logits, Y_prob, layer1, layer2, layer3, layer4 = graph_net(data, filenames)
-
-    attention_scores[patient_ID] = [layer1, layer2, layer3, layer4]
-
-    Y_hat = Y_prob.argmax(dim=1)
-
-    return attention_scores, label, Y_hat

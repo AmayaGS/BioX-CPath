@@ -28,16 +28,16 @@ def add_pe_to_graph(loader, walk_length):
 
     for batch_idx, (patient_ID, graph_object) in enumerate(loader.items()):
 
-        data, label, folder_ids, filenames = graph_object
+        data, label, metadata = graph_object
 
         transform = T.AddRandomWalkPE(walk_length)
         data = transform(data)
 
         data.x = torch.cat([data.x, data.random_walk_pe], dim=1)
 
-        loader_PE[patient_ID] = [data, label, folder_ids, filenames]
+        loader_PE[patient_ID] = [data, label, metadata]
 
-        del data, label, folder_ids, filenames, patient_ID, graph_object
+        del data, label, metadata, patient_ID, graph_object
         gc.collect()
 
     return loader_PE

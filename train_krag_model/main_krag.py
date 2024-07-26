@@ -25,9 +25,10 @@ import torch.optim as optim
 from torch_geometric.loader import DataLoader
 
 # KRAG functions
-from training_loops.krag_training_loop import train_graph
+from train_test_loops.krag_train_val_loop import train_graph
+from train_test_loops.krag_test_loop import test_graph
 from utils.auxiliary_functions import seed_everything
-from utils.plotting_functions import plot_averaged_results
+from utils.plotting_functions import plot_averaged_results, plot_roc_curve, plot_average_roc_curve, plot_average_pr_curve
 from models.krag_model import KRAG_Classifier
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -80,7 +81,6 @@ def train_krag(args):
 
     training_folds = []
     validation_folds = []
-    testing_folds = []
     for folds, splits in sss_folds.items():
         for i, (split, patient_ids) in enumerate(splits.items()):
             if i == 0:
@@ -89,9 +89,7 @@ def train_krag(args):
             if i== 1:
                 val_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
                 validation_folds.append(val_dict)
-            if i == 2:
-                test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-                testing_folds.append(test_dict)
+
 
     since = time.time()
     all_results = []
@@ -110,10 +108,8 @@ def train_krag(args):
 
         train_graph_loader = DataLoader(train_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, sampler=sampler, drop_last=False)
         val_graph_loader = DataLoader(val_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
-        #test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, drop_last=False)
 
         logging_file_path = results + "/" + run_results_folder + "_fold_" + str(fold_idx) + "_logging_file.txt"
-        #_, results_dict, best_acc, best_AUC = train_graph_multi_wsi(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, lr_scheduler, l1_norm=args.l1_norm, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
         _, results_dict, best_acc, best_AUC = train_graph(graph_net, train_graph_loader, val_graph_loader, loss_fn, optimizer_ft, logging_file_path, fold_idx, n_classes=args.n_classes, num_epochs=args.num_epochs, checkpoint=args.checkpoint, checkpoint_path= checkpoints + "/checkpoint_fold_" + str(fold_idx) + "_epoch_")
 
         all_results.append(results_dict)
@@ -141,3 +137,80 @@ def train_krag(args):
     summary =[mean_best_acc] + [mean_best_AUC]
     summary_df = pd.DataFrame(summary, index=['val_accuracy', 'val_AUC']).transpose()
     summary_df.to_csv(results + "/" + run_results_folder + "_summary_best_scores.csv", index=0)
+
+
+def test_krag(args):
+
+    seed_everything(args.seed)
+
+    current_directory = args.directory
+    run_results_folder = f"graph_{args.graph_mode}_{args.convolution}_PE_{args.encoding_size}_{args.embedding_net}_{args.dataset_name}_{args.seed}_{args.heads}_{args.pooling_ratio}_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}"
+    results = os.path.join(current_directory, "output/" + run_results_folder)
+    checkpoints = results + "/checkpoints"
+    print(results)
+
+    # load pickled graphs
+    if args.encoding_size == 0:
+        with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
+            graph_dict = pickle.load(file)
+
+    if args.encoding_size > 0:
+        with open(current_directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_positional_encoding_{args.encoding_size}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
+            graph_dict = pickle.load(file)
+
+    # load stratified random split train/test folds
+    with open(current_directory + f"/train_test_strat_splits_{args.dataset_name}.pkl", "rb") as splits:
+        sss_folds = pickle.load(splits)
+
+    testing_folds = []
+    for fold, splits in sss_folds.items():
+        # print(f"Processing fold {fold + 1}/{len(splits)}")
+        for i, (split, patient_ids) in enumerate(splits.items()):
+            if i == 2:
+                test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
+                testing_folds.append(test_dict)
+
+    since = time.time()
+    all_results = []
+    for fold_idx, test_fold in enumerate(testing_folds):
+
+        # initialising new graph, loss, optimiser between folds
+        graph_net = KRAG_Classifier(args.embedding_vector_size,
+                                    hidden_dim= args.hidden_dim,
+                                    num_classes= args.n_classes,
+                                    heads= args.heads,
+                                    pooling_ratio= args.pooling_ratio,
+                                    walk_length= args.encoding_size,
+                                    conv_type= args.convolution)
+        loss_fn = nn.CrossEntropyLoss()
+
+        if use_gpu:
+            graph_net.cuda()
+
+        # load best model from training and validation
+        checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_bm.pth")
+        graph_net.load_state_dict(checkpoint)
+
+        test_graph_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False,
+                                       num_workers=args.num_workers, drop_last=False)
+        logging_file_path = results + "/" + run_results_folder + "_test_fold_" + str(fold_idx) + "_results.txt"
+        test_results = test_graph(graph_net, test_graph_loader, loss_fn, args.n_classes, logging_file_path, fold_idx)
+
+        all_results.append(test_results)
+
+        # Plot ROC curve for this fold
+        plot_roc_curve(test_results, args.n_classes, fold_idx, results)
+
+    # Compute average results
+    avg_accuracy = np.mean([r['test_accuracy'] for r in all_results])
+    std_accuracy = np.std([r['test_accuracy'] for r in all_results])
+    avg_auc = np.mean([r['test_auc'] for r in all_results])
+    std_auc = np.std([r['test_auc'] for r in all_results])
+
+    print(f"Average Test Accuracy: {avg_accuracy:.4f} ± {std_accuracy:.4f}")
+    print(f"Average Test AUC: {avg_auc:.4f} ± {std_auc:.4f}")
+
+    # Plot average curves
+    plot_average_roc_curve(all_results, args.n_classes, results)
+    plot_average_pr_curve(all_results, args.n_classes, results)
+

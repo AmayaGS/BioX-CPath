@@ -9,10 +9,22 @@ import os
 import re
 import numpy as np
 import pandas as pd
+import pickle
 import matplotlib.pyplot as plt
-import PIL.Image as Image
+from PIL import Image
 from scipy.ndimage import gaussian_filter
-import gc
+import logging
+
+import torch
+
+# PyG
+from torch_geometric.loader import DataLoader
+
+# KRAG functions
+from models.krag_heatmap_models import KRAG_Classifier
+from train_test_loops.training_loop_heatmap import slide_att_scores
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 
@@ -21,241 +33,190 @@ def extract_numbers(string):
     numbers = re.findall(pattern, string)
     return [int(num) for num in numbers]
 
-def normalize_attention_scores_per_layer(attention_scores_dict):
 
-    normalized_scores_dict = {}
+def already_processed(filename, heatmap_path, heatmap_type, test_fold):
+    raw_file = f"{heatmap_path}/{filename}_raw_{heatmap_type}_fold_{test_fold}.png"
+    smoothed_file = f"{heatmap_path}/{filename}_smoothed_{heatmap_type}_fold_{test_fold}.png"
+    return os.path.exists(raw_file) and os.path.exists(smoothed_file)
 
-    for patient, attention_scores_list in attention_scores_dict.items():
-        # Extract all the scores from the four lists
-        scores = []
-        for attention_scores in attention_scores_list:
-            scores.extend([score for _, score in attention_scores])
 
-        # Find the overall minimum and maximum scores
-        min_score = min(scores)
-        max_score = max(scores)
+def create_spatial_info_dict(df_filename):
+    return {row['Patch_name']: ({'row1': row['Patch_coordinates'][2],
+                                 'row2': row['Patch_coordinates'][3],
+                                 'col1': row['Patch_coordinates'][0],
+                                 'col2': row['Patch_coordinates'][1]},
+                                row['norm_score'])
+            for _, row in df_filename.iterrows()}
 
-        # Normalize each score using min-max normalization
-        normalized_scores_list = []
-        for attention_scores in attention_scores_list:
-            normalized_scores = []
-            for patch_name, score in attention_scores:
-                if max_score - min_score == 0:
-                    normalized_score = 0.5
-                else:
-                    normalized_score = (score - min_score) / (max_score - min_score) + 0.5
-                normalized_scores.append((patch_name, normalized_score))
-            normalized_scores_list.append(normalized_scores)
 
-        normalized_scores_dict[patient] = normalized_scores_list
+def create_canvas_and_att_img(spatial_info_dict, path_to_folder, patch_size):
+    max_x = max(info[0]['row2'] for info in spatial_info_dict.values())
+    max_y = max(info[0]['col2'] for info in spatial_info_dict.values())
 
-    return normalized_scores_dict
+    canvas = np.zeros((max_y + patch_size, max_x + patch_size, 3), dtype=np.uint8)
+    att_img = np.zeros((max_y + patch_size, max_x + patch_size), dtype=np.float64)
 
-def create_heatmaps(patient_id, i, attn_score, img_folders, heatmap_path, heatmap_list, path_to_patches, patch_size):
+    for patch_name, (coordinates, score) in spatial_info_dict.items():
+        x1, x2, y1, y2 = coordinates['row1'], coordinates['row2'], coordinates['col1'], coordinates['col2']
 
-# TODO add normalisation step to the attention scores
-    os.makedirs(heatmap_path + f"_{i}", exist_ok=True)
+        att_img[y1:y2, x1:x2] = score
 
-    for filename in img_folders:
-        if filename not in heatmap_list:
-            if patient_id in filename:
+        patch_image_path = os.path.join(path_to_folder, patch_name)
 
-                attn_heatmap_dict = {}
+        if not os.path.exists(patch_image_path):
+            logging.warning(f"File not found: {patch_image_path}")
+            continue
 
-                path_to_folder = os.path.join(path_to_patches, filename)
+        try:
+            patch_image = np.array(Image.open(patch_image_path))
+            if patch_image.shape[2] == 4:
+                patch_image = patch_image[:, :, :3]
+            canvas[y1:y2, x1:x2, :] = patch_image
+        except Exception as e:
+            logging.error(f"Error processing file {patch_image_path}: {str(e)}")
 
-                df = []
-                #attn_score_pid = attn_score[patient_id]
-                attn_score_pid = attn_score
-                for idx in range(len(attn_score_pid)):
-                    df.append([patient_id, attn_score_pid[idx][0][0].split('_row1')[0], extract_numbers(attn_score_pid[idx][0][0]), attn_score_pid[idx][0][0], attn_score_pid[idx][1]])
-                df = pd.DataFrame(df, columns=["Patient_ID", "Filename", "Patch_coordinates", "Patch_name", "norm_score"])
+    return canvas, att_img
 
-                df_filename = df[df['Filename'] == filename]
-                df_filename.loc[:, 'norm_score'] = df_filename.loc[:, 'norm_score'].fillna(0)
 
-                spatial_info_dict = {}
-                print(filename)
+def plot_heatmap(canvas, att_img, smoothed_att, filename, heatmap_path, heatmap_type, test_fold):
+    reconstructed_image_pil = Image.fromarray(canvas)
 
-                for index, row in enumerate(df_filename.iterrows()):
-                    coordinates = df_filename['Patch_coordinates'].iloc[index]
+    # Raw heatmap
+    raw_fig = plt.figure(figsize=(60, 20))
+    plt.subplot(121)
+    plt.title('Original image', size=60)
+    plt.imshow(reconstructed_image_pil)
 
-                    patch_name = df_filename['Patch_name'].iloc[index]
+    plt.subplot(122)
+    plt.title('Predicted heatmap', size=60)
+    heatmap_ = plt.imshow(att_img, cmap=plt.cm.jet)
+    plt.colorbar(heatmap_)
+    plt.imshow(reconstructed_image_pil, alpha=0.4)
 
-                    spatial_info_dict[patch_name] = ({
-                        'row1': coordinates[2],
-                        'row2': coordinates[3],
-                        'col1': coordinates[0],
-                        'col2': coordinates[1]},
-                        df_filename['norm_score'].iloc[index])
+    plt.suptitle(f'{filename} {heatmap_type}', size=60)
+    plt.savefig(f"{heatmap_path}/{filename}_raw_{heatmap_type}_fold_{test_fold}.png", dpi=raw_fig.dpi)
+    plt.close()
 
-                max_x = int(max(info[0]['row2'] for info in spatial_info_dict.values()))
-                max_y = int(max(info[0]['col2'] for info in spatial_info_dict.values()))
+    # Smoothed heatmap
+    smoothed_fig = plt.figure(figsize=(60, 20))
+    plt.subplot(121)
+    plt.title('Original image', size=60)
+    plt.imshow(reconstructed_image_pil)
 
-                canvas = np.zeros((max_y + patch_size, max_x + patch_size, 3), dtype=np.uint8)
-                att_img = np.zeros((max_y + patch_size, max_x + patch_size), dtype=np.float64)
+    plt.subplot(122)
+    plt.title('Smoothed heatmap', size=60)
+    heatmap_ = plt.imshow(smoothed_att, cmap=plt.cm.jet)
+    plt.imshow(reconstructed_image_pil, alpha=0.4)
 
-                for patch_name, (coordinates, score) in spatial_info_dict.items():
+    plt.suptitle(f'{filename} {heatmap_type}', size=60)
+    plt.savefig(f"{heatmap_path}/{filename}_smoothed_{heatmap_type}_fold_{test_fold}.png",
+                dpi=smoothed_fig.dpi)
+    plt.close()
 
-                    x1, x2, y1, y2 = coordinates['row1'], coordinates['row2'], coordinates['col1'], coordinates['col2']
 
-                    # att heatmap
-                    patch_score = np.ones((patch_size, patch_size))
-                    weighted_patch = patch_score * score
-                    att_img[y1:y2, x1:x2] = weighted_patch
+def process_scores(patient_id, scores, heatmap_path, path_to_patches, patch_size, test_fold, heatmap_type):
+    grouped_scores = {}
+    for patch_name, score in scores:
+        filename = patch_name.split('_row1')[0]  # Extract filename from patch name
+        if patient_id in filename:  # Only include filenames that contain the patient_id
+            if filename not in grouped_scores:
+                grouped_scores[filename] = []
+            grouped_scores[filename].append((patch_name, score))
 
-                    # reconstruct original image
-                    patch_image_path = os.path.join(path_to_folder, patch_name)
-                    patch_image = np.array(Image.open(patch_image_path))
-                    if patch_image.shape[2] == 4:
-                        patch_image = patch_image[:, :, :3]
+    for filename, file_scores in grouped_scores.items():
+        if already_processed(filename, heatmap_path, heatmap_type, test_fold):
+            logging.info(f"Skipping {filename} for {heatmap_type}, fold {test_fold} as it's already processed.")
+            continue
 
-                    canvas[y1:y2, x1:x2, :] = patch_image
+        logging.info(f"Processing heatmap for file: {filename} for {heatmap_type}, fold {test_fold}")
 
-                smoothed_att = gaussian_filter(att_img, sigma=200)
-                attn_heatmap_dict[filename] = [canvas, att_img, smoothed_att]
+        path_to_folder = os.path.join(path_to_patches, filename)
 
-                for k, v in attn_heatmap_dict.items():
+        if not os.path.exists(path_to_folder):
+            logging.warning(f"Folder not found: {path_to_folder}")
+            continue
 
-                    reconstructed_image_pil = Image.fromarray(v[0])
-                    original_heatmap = v[1]
-                    smoothed_heatmap = v[2]
+        df_filename = pd.DataFrame(file_scores, columns=['Patch_name', 'norm_score'])
+        df_filename['Filename'] = filename
+        df_filename['Patch_coordinates'] = df_filename['Patch_name'].apply(extract_numbers)
 
-                    ### METHOD 1: heatmap without smoothing ###
-                    raw_fig = plt.figure(figsize=(60, 20))
-                    plt.subplot(121)
-                    plt.title('Original image', size=60)
-                    plt.imshow(reconstructed_image_pil)
+        spatial_info_dict = create_spatial_info_dict(df_filename)
+        canvas, att_img = create_canvas_and_att_img(spatial_info_dict, path_to_folder, patch_size)
+        smoothed_att = gaussian_filter(att_img, sigma=200)
 
-                    plt.subplot(122)
-                    plt.title('Predicted heatmap', size=60)
-                    heatmap_ = plt.imshow(original_heatmap, cmap=plt.cm.jet)
-                    plt.colorbar(heatmap_)
-                    plt.imshow(reconstructed_image_pil, alpha=0.4)
+        plot_heatmap(canvas, att_img, smoothed_att, filename, heatmap_path, heatmap_type, test_fold)
 
-                    plt.suptitle(f'{k}', size=60)
-                    plt.show()
-                    raw_fig.savefig(heatmap_path + f"_{i}" + f"/{k}_raw_{i}.png", dpi=raw_fig.dpi)
-                    plt.close()
-                    gc.collect()
 
-                    # ### METHOD 2: heatmap with smoothing ###
-                    smoothed_fig = plt.figure(figsize=(60, 20))
-                    plt.subplot(121)
-                    plt.title('Original image', size=60)
-                    plt.imshow(reconstructed_image_pil)
+def create_heatmaps(patient_id, attention_scores, heatmap_path, path_to_patches, patch_size, test_fold):
+    os.makedirs(heatmap_path, exist_ok=True)
 
-                    plt.subplot(122)
-                    plt.title('Smoothed heatmap', size=60)
-                    heatmap_ = plt.imshow(smoothed_heatmap, cmap=plt.cm.jet)
-                    plt.imshow(reconstructed_image_pil, alpha=0.4)
+    # Process cumulative scores
+    process_scores(patient_id, attention_scores['cumulative'], heatmap_path, path_to_patches, patch_size, test_fold,
+                   "cumulative")
 
-                    plt.suptitle(f'{k}', size=60)
-                    plt.show()
-                    smoothed_fig.savefig(heatmap_path + f"_{i}" + f"/{k}_smoothed_{i}.png", dpi=smoothed_fig.dpi)
-                    plt.close()
-                    gc.collect()
+    # Process per-layer scores
+    for layer, layer_scores in enumerate(attention_scores['per_layer']):
+        process_scores(patient_id, layer_scores, heatmap_path, path_to_patches, patch_size, test_fold, f"layer_{layer}")
 
-def create_heatmaps_per_layer(patient_id, i, attn_score, img_folders, heatmap_path, heatmap_list, path_to_patches, patch_size):
 
-    os.makedirs(heatmap_path + f"_{i}", exist_ok=True)
+def process_fold(args, fold, test_ids, graph_dict, heatmap_path, loss_fn, current_directory):
+    # Initialize the model
+    graph_net = KRAG_Classifier(
+        args.embedding_vector_size,
+        hidden_dim=args.hidden_dim,
+        num_classes=args.n_classes,
+        heads=args.heads,
+        pooling_ratio=args.pooling_ratio,
+        walk_length=args.encoding_size,
+        conv_type=args.convolution,
+        attention=args.attention
+    )
 
-    for filename in img_folders:
-        if filename not in heatmap_list:
-            if patient_id in filename:
+    # Load model weights
+    checkpoint_path = os.path.join(args.checkpoint_weights, f"best_val_models/checkpoint_fold_{fold}_bm.pth")
+    checkpoint = torch.load(checkpoint_path)
+    graph_net.load_state_dict(checkpoint)
 
-                attn_heatmap_dict = {}
+    if torch.cuda.is_available():
+        graph_net.cuda()
 
-                path_to_folder = os.path.join(path_to_patches, filename)
+    graph_net.eval()
 
-                df = []
-                #attn_score_pid = attn_score[patient_id]
-                attn_score_pid = attn_score
-                for idx in range(len(attn_score_pid)):
-                    df.append([patient_id, attn_score_pid[idx][0][0].split('_row1')[0], extract_numbers(attn_score_pid[idx][0][0]), attn_score_pid[idx][0][0], attn_score_pid[idx][1]])
-                df = pd.DataFrame(df, columns=["Patient_ID", "Filename", "Patch_coordinates", "Patch_name", "norm_score"])
+    results = []
 
-                df_filename = df[df['Filename'] == filename]
-                df_filename.loc[:, 'norm_score'] = df_filename.loc[:, 'norm_score'].fillna(0)
+    for patient_id in test_ids:
+        if patient_id not in graph_dict:
+            logging.info(f"Warning: Patient ID {patient_id} not found in graph dictionary. Skipping.")
+            continue
 
-                spatial_info_dict = {}
-                print(filename)
+        slide_embedding = graph_dict[patient_id]
+        test_graph_loader = DataLoader([slide_embedding], batch_size=1, shuffle=False, num_workers=args.num_workers)
 
-                for index, row in enumerate(df_filename.iterrows()):
-                    coordinates = df_filename['Patch_coordinates'].iloc[index]
+        logging.info(f"Processing heatmaps for patient: {patient_id}")
+        attention_scores, actual_label, predicted_label = slide_att_scores(graph_net,
+                                                                           test_graph_loader,
+                                                                           patient_id,
+                                                                           loss_fn,
+                                                                           n_classes=args.n_classes)
 
-                    patch_name = df_filename['Patch_name'].iloc[index]
+        results.append([patient_id, actual_label.item(), predicted_label.item()])
+        # Save attention attention_scores
+        with open(
+                current_directory + f"/attn_score_dict_{args.graph_mode}_fold_{fold}_{patient_id}_{args.dataset_name}.pkl",
+                "wb") as file:
+            pickle.dump(attention_scores, file)
 
-                    spatial_info_dict[patch_name] = ({
-                        'row1': coordinates[2],
-                        'row2': coordinates[3],
-                        'col1': coordinates[0],
-                        'col2': coordinates[1]},
-                        df_filename['norm_score'].iloc[index])
+        # Create heatmaps
+        create_heatmaps(patient_id,
+                        attention_scores[patient_id],
+                        heatmap_path,
+                        args.path_to_patches,
+                        args.patch_size,
+                        fold)
 
-                max_x = int(max(info[0]['row2'] for info in spatial_info_dict.values()))
-                max_y = int(max(info[0]['col2'] for info in spatial_info_dict.values()))
+    # Save results
+    df_results = pd.DataFrame(results, columns=['Patient_ID', 'Label', 'Predicted_label'])
+    df_results.to_csv(current_directory + f"/predicted_results_{args.graph_mode}_{fold}_{args.dataset_name}.csv",
+                      index=False)
 
-                canvas = np.zeros((max_y + patch_size, max_x + patch_size, 3), dtype=np.uint8)
-                att_img = np.zeros((max_y + patch_size, max_x + patch_size), dtype=np.float64)
-
-                for patch_name, (coordinates, score) in spatial_info_dict.items():
-
-                    x1, x2, y1, y2 = coordinates['row1'], coordinates['row2'], coordinates['col1'], coordinates['col2']
-
-                    # att heatmap
-                    patch_score = np.ones((patch_size, patch_size))
-                    weighted_patch = patch_score * score
-                    att_img[y1:y2, x1:x2] = weighted_patch
-
-                    # reconstruct original image
-                    patch_image_path = os.path.join(path_to_folder, patch_name)
-                    patch_image = np.array(Image.open(patch_image_path))
-                    if patch_image.shape[2] == 4:
-                        patch_image = patch_image[:, :, :3]
-
-                    canvas[y1:y2, x1:x2, :] = patch_image
-
-                smoothed_att = gaussian_filter(att_img, sigma=200)
-                attn_heatmap_dict[filename] = [canvas, att_img, smoothed_att]
-
-                for k, v in attn_heatmap_dict.items():
-
-                    reconstructed_image_pil = Image.fromarray(v[0])
-                    original_heatmap = v[1]
-                    smoothed_heatmap = v[2]
-
-                    ### METHOD 1: heatmap without smoothing ###
-                    raw_fig = plt.figure(figsize=(60, 20))
-                    plt.subplot(121)
-                    plt.title('Original image', size=60)
-                    plt.imshow(reconstructed_image_pil)
-
-                    plt.subplot(122)
-                    plt.title('Predicted heatmap', size=60)
-                    heatmap_ = plt.imshow(original_heatmap, cmap=plt.cm.jet)
-                    plt.colorbar(heatmap_)
-                    plt.imshow(reconstructed_image_pil, alpha=0.4)
-
-                    plt.suptitle(f'{k}', size=60)
-                    plt.show()
-                    raw_fig.savefig(heatmap_path + f"_{i}" + f"/{k}_raw_{i}.png", dpi=raw_fig.dpi)
-                    plt.close()
-                    gc.collect()
-
-                    # ### METHOD 2: heatmap with smoothing ###
-                    smoothed_fig = plt.figure(figsize=(60, 20))
-                    plt.subplot(121)
-                    plt.title('Original image', size=60)
-                    plt.imshow(reconstructed_image_pil)
-
-                    plt.subplot(122)
-                    plt.title('Smoothed heatmap', size=60)
-                    heatmap_ = plt.imshow(smoothed_heatmap, cmap=plt.cm.jet)
-                    plt.imshow(reconstructed_image_pil, alpha=0.4)
-
-                    plt.suptitle(f'{k}', size=60)
-                    plt.show()
-                    smoothed_fig.savefig(heatmap_path + f"_{i}" + f"/{k}_smoothed_{i}.png", dpi=smoothed_fig.dpi)
-                    plt.close()
-                    gc.collect()
+    logging.info(f"Heatmap generation completed for fold {fold}. Results saved.")

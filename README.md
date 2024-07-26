@@ -76,13 +76,13 @@ Preprocessing can be run using the following command:
 ```bash
 python main.py --preprocess --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
 ```
-`--preprocess` will create 5 new folders: results, dictionaries, masks, contours.
+`--preprocess` will create 4 new folders: output, dictionaries, masks, contours.
 
 - `masks` contains all the downsampled binary masks obtained during tissue segmentation. 
 
 - `Contours` contain downsampled WSIs with mask contours drawn on thumbnails of the WSIs as a sanity check. You can easily check you're segmenting the right thing and that there's no issues with the WSIs themselves.
 
-- `results` contains the patches folder, containing all the extracted patches, as well as the `extracted_patches.csv` file which contains all the patient_IDs, filenames, coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
+- `output` contains the patches folder, containing all the extracted patches, as well as the `extracted_patches.csv` file which contains all the patient_IDs, filenames, coordinates and locations on disk of the patches extracted during the tissue segmentation step.  
 
 - `dictionaries` contains pickled dictionaries of the embedded feature vectors, graphs with random walk positional encodings for each patient.
 
@@ -133,6 +133,6 @@ python main.py --heatmap --directory path/to/output --dataset_name dataset_name 
 
 This will generate smoothed heatmaps for the test folds using the trained model weights and store them in the `heatmap_path` directory. Heatmaps maps can be examined overall or for each layer of the model, as shown below:
 
-![](multi_stain.png)
+![](multi_stain_v2.png)
 
 ![](heatmap_per_layer.png)

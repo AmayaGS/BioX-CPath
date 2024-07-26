@@ -18,7 +18,7 @@ from torch_geometric.loader import DataLoader
 # KRAG functions
 from utils.auxiliary_functions import seed_everything
 from models.krag_model import KRAG_Classifier
-from training_loops.krag_training_loop import test_graph_multi_wsi
+from train_test_loops.krag_train_val_loop import test_graph_multi_wsi
 
 use_gpu = torch.cuda.is_available()
 
