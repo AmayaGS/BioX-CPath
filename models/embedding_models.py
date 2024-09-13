@@ -130,12 +130,5 @@ class resnet50_embedding(nn.Module):
         output = output.view(output.size()[0], -1)
         return output
 
-# %%
-
-# model = contrastive_resnet18(weight_path, 1000)
-# model.cuda()
-# img = torch.randn(2, 3, 224, 224).cuda()
-# output = model(img)
-#
-# print(output.shape)
+# class UNI_patch_embedding():
 
