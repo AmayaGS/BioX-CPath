@@ -36,7 +36,7 @@ class KRAGResultsGenerator:
 
     def _process_fold(self, fold, patient_ids, graph_dict):
         graph_net = self._initialize_model(fold)
-        model_name = self.results_dir.split('\\')[-1]
+        model_name = self.results_dir.split('/')[-1]
         vis_path = os.path.join(self.args.directory, "vis_data", model_name)
         output_dir = os.path.join(self.args.directory, "graph_visualisations", model_name)
         os.makedirs(vis_path, exist_ok=True)
@@ -92,7 +92,7 @@ class KRAGResultsGenerator:
             all_preds[patient_id] = [patient_data['actual_label'], patient_data['predicted_label']]
             all_metrics[patient_id] = metrics
 
-        #self._save_pred_results(all_preds, fold)
+        self._save_pred_results(all_preds, fold)
         metrics_visualiser.plot_metrics(all_metrics, fold_dir)
 
         # # global edge weight distribution

@@ -1,12 +1,7 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Nov  6 16:08:28 2023
-
-@author: AmayaGS
-"""
-
+import os
 import torch
 import torch.nn as nn
+import timm
 from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights, vgg16_bn, VGG16_BN_Weights, convnext_base, ConvNeXt_Base_Weights
 
 
@@ -130,5 +125,18 @@ class resnet50_embedding(nn.Module):
         output = output.view(output.size()[0], -1)
         return output
 
-# class UNI_patch_embedding():
+class GigaPath_embedding(nn.Module):
+    # timm.create_model("vit_giant_patch14_dinov2", pretrained=True, pretrained_cfg_overlay=dict(file=/pytorch_model.bin"))
+    def __init__(self, args, embedding_vector_size):
+        super(GigaPath_embedding, self).__init__()
+
+        self.model = timm.create_model("hf_hub:prov-gigapath/prov-gigapath", pretrained=True)
+        self.final_layer = nn.Linear(1536, embedding_vector_size)
+
+    def forward(self, x):
+
+        x = self.model(x)
+        output = self.final_layer(x)
+
+        return output
 

@@ -33,7 +33,7 @@ def add_pe_to_graph(loader, walk_length):
         transform = T.AddRandomWalkPE(walk_length)
         data = transform(data)
 
-        data.x = torch.cat([data.x, data.random_walk_pe], dim=1)
+        #data.x = torch.cat([data.x, data.random_walk_pe], dim=1)
 
         loader_PE[patient_ID] = [data, label, metadata]
 

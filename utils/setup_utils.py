@@ -26,6 +26,7 @@ from torch import Tensor
 from torch_geometric.utils import scatter
 
 from models.KRAG_model import KRAG_Classifier
+from models.MUSTANG_model import MUSTANG_Classifier
 from models.DeepGraphConv_model import DeepGraphConv
 from models.patchGCN_model import PatchGCN
 from models.GTP_model import GTP_Classifier
@@ -37,6 +38,11 @@ MODEL_CONFIGS = {
     'KRAG': {
         'graph_mode': 'krag',
         'model_class': KRAG_Classifier,
+        'use_args': True
+    },
+    'MUSTANG': {
+        'graph_mode': 'krag',
+        'model_class': MUSTANG_Classifier,
         'use_args': True
     },
     'CLAM': {

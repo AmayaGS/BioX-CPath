@@ -284,15 +284,15 @@ class PatchGCN(torch.nn.Module):
 #             edge_index = data.edge_latent
 
 #         batch = data.batch
-#         edge_attr = None
+#         edge_attr_dim = None
 
 #         x = self.fc(data.x)
 #         x_ = x
 
-#         x = self.layers[0].conv(x_, edge_index, edge_attr)
+#         x = self.layers[0].conv(x_, edge_index, edge_attr_dim)
 #         x_ = torch.cat([x_, x], axis=1)
 #         for layer in self.layers[1:]:
-#             x = layer(x, edge_index, edge_attr)
+#             x = layer(x, edge_index, edge_attr_dim)
 #             x_ = torch.cat([x_, x], axis=1)
 
 #         h_path = x_

@@ -5,6 +5,8 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
+from sklearn.model_selection import StratifiedShuffleSplit
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,6 +16,7 @@ from utils.plotting_functions_utils import plot_averaged_results
 from utils.plotting_functions_utils import plot_average_roc_curve, plot_average_pr_curve
 
 from models.KRAG_model import KRAG_Classifier
+from models.MUSTANG_model import MUSTANG_Classifier
 from models.patchGCN_model import PatchGCN
 from models.DeepGraphConv_model import DeepGraphConv
 from models.GTP_model import GTP_Classifier
@@ -21,9 +24,14 @@ from models.TransMIL_model import TransMIL
 from models.CLAM_model import GatedAttention as CLAM
 
 
-
 def process_model_output(args, output, loss_fn):
     if args.model_name == 'KRAG':
+        logits, Y_prob, label = output
+        Y_hat = torch.argmax(Y_prob, dim=1)
+        loss = loss_fn(logits, label)
+        return logits, Y_prob, Y_hat, loss
+
+    elif args.model_name == 'MUSTANG':
         logits, Y_prob, label = output
         Y_hat = torch.argmax(Y_prob, dim=1)
         loss = loss_fn(logits, label)
@@ -81,7 +89,11 @@ def process_model_output(args, output, loss_fn):
 
 def load_data(args, results_dir):
     config = get_model_config(args)
-    run_settings = results_dir.split('\\')[-1]
+    run_settings = (
+        f"{args.model_name}_{config['graph_mode']}_{config['convolution']}_PE_{config['encoding_size']}"
+        f"_{args.embedding_net}_{args.dataset_name}_{args.seed}_{config['heads']}_{config['pooling_ratio']}"
+        f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}")
+
     checkpoints = os.path.join(results_dir, "checkpoints")
     os.makedirs(checkpoints, exist_ok = True)
 
@@ -101,6 +113,111 @@ def load_data(args, results_dir):
 
     return run_settings, checkpoints, graph_dict, sss_folds
 
+
+def create_cross_validation_splits(args, patient_id, label, test_size=0.2, n_splits=5,
+                                   seed=42, dataset_name="dataset", directory=".", hard_test_set=False):
+    """
+    Create a n-fold cross-validation split with held-out test set.
+    """
+    patient_labels = pd.read_csv(os.path.join(args.directory, "patient_labels.csv"))
+    extracted_patches = pd.read_csv(os.path.join(args.directory, f"extracted_patches_{args.slide_level}", "extracted_patches.csv"))
+
+    # Merge patches with patient labels
+    df = pd.merge(extracted_patches, patient_labels, on=patient_id)
+
+    # Drop duplicates to obtain unique patient IDs
+    df_labels = df.drop_duplicates(subset=patient_id).reset_index(drop=True)
+
+    if dataset_name.upper() == "CAMELYON16":
+        # For CAMELYON16, use the split column to create test set
+        test_data = df_labels[df_labels['split'] == 'test']
+        train_val_data = df_labels[df_labels['split'] == 'train']
+    elif hard_test_set:
+        # For hard test set, use the Hard column to create test set
+        test_data = df_labels[df_labels['Hard']]
+        train_val_data = df_labels[~df_labels['Hard']]
+    else:
+        # For other datasets, create a held-out test set
+        sss_test = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
+        train_val_index, test_index = next(sss_test.split(df_labels[patient_id], df_labels[label]))
+        train_val_data = df_labels.iloc[train_val_index]
+        test_data = df_labels.iloc[test_index]
+
+    # Create 5-fold cross-validation splits on the training/validation data
+    sss_cv = StratifiedShuffleSplit(n_splits=n_splits, test_size=1/n_splits, random_state=seed)
+
+    fold_dictionary = {}
+
+    for i, (train_index, val_index) in enumerate(sss_cv.split(train_val_data[patient_id], train_val_data[label])):
+        fold_name = f"Fold {i}"
+        fold_dictionary[fold_name] = {
+            "Train": list(train_val_data.iloc[train_index][patient_id]),
+            "Val": list(train_val_data.iloc[val_index][patient_id]),
+            "Test": list(test_data[patient_id])
+        }
+
+        # Verify no overlap
+        train_set = set(fold_dictionary[fold_name]["Train"])
+        val_set = set(fold_dictionary[fold_name]["Val"])
+        test_set = set(fold_dictionary[fold_name]["Test"])
+        assert len(train_set.intersection(val_set)) == 0, "Train and Val sets overlap"
+        assert len(train_set.intersection(test_set)) == 0, "Train and Test sets overlap"
+        assert len(val_set.intersection(test_set)) == 0, "Val and Test sets overlap"
+
+    # Save the fold dictionary
+    output_path = os.path.join(directory, f"train_test_strat_splits_{dataset_name}.pkl")
+    with open(output_path, "wb") as file:
+        pickle.dump(fold_dictionary, file)
+
+    print(f"Cross-validation splits saved to {output_path}")
+
+def create_stratified_splits(args, patient_id, label, train_fraction, val_fraction, splits, seed, dataset_name, directory):
+
+    """
+    Create a n-fold train/val/test split with stratified sampling on patient labels. N held-out test sets are created.
+    """
+
+    patient_labels = pd.read_csv(os.path.join(args.directory, "patient_labels.csv"))
+    extracted_patches = pd.read_csv(os.path.join(args.directory, f"extracted_patches_{args.slide_level}", "extracted_patches.csv"))
+
+    # Merge patches with patient labels
+    df = pd.merge(extracted_patches, patient_labels, on=patient_id)
+
+    # Drop duplicates to obtain unique patient IDs
+    df_labels = df.drop_duplicates(subset=patient_id).reset_index(drop=True)
+
+    # stratified split on labels
+    sss = StratifiedShuffleSplit(n_splits= splits, test_size= 1 - train_fraction, random_state=seed)
+
+    # creating a dictionary which keeps a list of the Patient IDs from the stratified training splits. Outer key is Fold, inner key is Train/Val/Test.
+    fold_dictionary = {}
+
+    for i, (train_val_index, test_index) in enumerate(sss.split(df_labels[patient_id], df_labels[label])):
+
+        train_val_data = df_labels.iloc[train_val_index]
+        val_split = StratifiedShuffleSplit(n_splits=1, test_size= val_fraction, random_state=seed)
+        train_index, val_index = next(val_split.split(train_val_data[patient_id], train_val_data[label]))
+
+        fold_name = f"Fold {i}"
+        fold_dictionary[fold_name] = {
+            "Train": list(train_val_data.iloc[train_index][patient_id]),
+            "Val": list(train_val_data.iloc[val_index][patient_id]),
+            "Test": list(df_labels.iloc[test_index][patient_id])
+        }
+
+        # Verify no overlap
+        train_set = set(fold_dictionary[fold_name]["Train"])
+        val_set = set(fold_dictionary[fold_name]["Val"])
+        test_set = set(fold_dictionary[fold_name]["Test"])
+        assert len(train_set.intersection(val_set)) == 0, "Train and Val sets overlap"
+        assert len(train_set.intersection(test_set)) == 0, "Train and Test sets overlap"
+        assert len(val_set.intersection(test_set)) == 0, "Val and Test sets overlap"
+
+    with open(directory + f"/train_test_strat_splits_{dataset_name}.pkl", "wb") as file:
+        pickle.dump(fold_dictionary, file)  # encode dict into Pickle
+        print(f"Stratified splits saved to {directory}/train_test_strat_splits_{dataset_name}.pkl")
+
+
 def prepare_data_loaders(data_dict, sss_folds):
     training_folds = []
     validation_folds = []
@@ -118,13 +235,26 @@ def prepare_data_loaders(data_dict, sss_folds):
 
 def initialise_model(args):
     if args.model_name == 'KRAG':
-        model = KRAG_Classifier(args.embedding_vector_size,
+        model = KRAG_Classifier(in_features=args.embedding_vector_size,
                                 hidden_dim=args.hidden_dim,
                                 num_classes=args.n_classes,
                                 heads=args.heads,
                                 pooling_ratio=args.pooling_ratio,
                                 walk_length=args.encoding_size,
-                                conv_type=args.convolution)
+                                conv_type=args.convolution,
+                                num_layers=args.num_layers)
+    elif args.model_name == 'MUSTANG':
+        model = MUSTANG_Classifier(args.embedding_vector_size,
+                                   edge_attr_dim=1,
+                                   node_attr_dim=1,
+                                   hidden_dim=args.hidden_dim,
+                                   num_classes=args.n_classes,
+                                   heads=args.heads,
+                                   pooling_ratio=args.pooling_ratio,
+                                   walk_length=args.encoding_size,
+                                   conv_type=args.convolution,
+                                   num_layers=args.num_layers,
+                                   embedding_dim=10)
     elif args.model_name == 'CLAM':
         model = CLAM(args.embedding_vector_size)
     elif args.model_name == 'DeepGraphConv':
@@ -189,8 +319,14 @@ def summarise_test_results(all_results, results_dir, logger, args):
         'test_AUC': [avg_auc, std_auc]
     }, index=['mean', 'std']).T
 
+    config = get_model_config(args)
+
     # Save summary to CSV
-    run_settings = results_dir.split('\\')[-1]
+    run_settings = (
+        f"{args.model_name}_{config['graph_mode']}_{config['convolution']}_PE_{config['encoding_size']}"
+        f"_{args.embedding_net}_{args.dataset_name}_{args.seed}_{config['heads']}_{config['pooling_ratio']}"
+        f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}")
+
     summary_path = f"{results_dir}/{run_settings}_test_summary_scores.csv"
     summary_df.to_csv(summary_path, index=True)
 

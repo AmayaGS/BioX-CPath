@@ -35,45 +35,6 @@ def collate_fn_none(batch):
     return torch.utils.data.dataloader.default_collate(batch)
 
 
-def create_stratified_splits(extracted_patches, patient_labels, patient_id, label, train_fraction, val_fraction, splits, seed, dataset_name, directory):
-
-    # merging patches with the patient labels
-    df = pd.merge(extracted_patches, patient_labels, on=patient_id)
-
-    # drop duplicates to obtain the actual patient IDs that have a label assigned by the pathologist
-    df_labels = df.drop_duplicates(subset=patient_id).reset_index(drop=True)
-
-    # stratified split on labels
-    sss = StratifiedShuffleSplit(n_splits= splits, test_size= 1 - train_fraction, random_state=seed)
-
-    # creating a dictionary which keeps a list of the Patient IDs from the stratified training splits. Outer key is Fold, inner key is Train/Val/Test.
-    fold_dictionary = {}
-
-    for i, (train_val_index, test_index) in enumerate(sss.split(df_labels[patient_id], df_labels[label])):
-
-        train_val_data = df_labels.iloc[train_val_index]
-        val_split = StratifiedShuffleSplit(n_splits=1, test_size= val_fraction, random_state=seed)
-        train_index, val_index = next(val_split.split(train_val_data[patient_id], train_val_data[label]))
-
-        fold_name = f"Fold {i}"
-        fold_dictionary[fold_name] = {
-            "Train": list(train_val_data.iloc[train_index][patient_id]),
-            "Val": list(train_val_data.iloc[val_index][patient_id]),
-            "Test": list(df_labels.iloc[test_index][patient_id])
-        }
-
-        # Verify no overlap
-        train_set = set(fold_dictionary[fold_name]["Train"])
-        val_set = set(fold_dictionary[fold_name]["Val"])
-        test_set = set(fold_dictionary[fold_name]["Test"])
-        assert len(train_set.intersection(val_set)) == 0, "Train and Val sets overlap"
-        assert len(train_set.intersection(test_set)) == 0, "Train and Test sets overlap"
-        assert len(val_set.intersection(test_set)) == 0, "Val and Test sets overlap"
-
-    with open(directory + f"/train_test_strat_splits_{dataset_name}.pkl", "wb") as file:
-        pickle.dump(fold_dictionary, file)  # encode dict into Pickle
-
-
 # Function to create spatial adjacency matrix
 def create_adjacency_matrix(patches):
 

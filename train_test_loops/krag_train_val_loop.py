@@ -1,34 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Mar 3 17:34:24 2023
-
-@author: AmayaGS
-"""
-
+import os
 import time
-import os.path
-from collections import defaultdict
-
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
-import numpy as np
-from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix
-from sklearn.preprocessing import label_binarize
-
-import torch
-from torch_geometric.data import Data
-
-from utils.profiling_utils import train_profiler
-from utils.plotting_functions_utils import plot_training_results
-
-use_gpu = torch.cuda.is_available()
-
-import gc
-gc.enable()
-
-
-import time
-import os.path
 from collections import defaultdict
 
 import numpy as np

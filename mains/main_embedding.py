@@ -27,8 +27,8 @@ from torchvision import transforms
 
 # KRAG functions
 from utils.dataloaders_utils import Loaders
-from models.embedding_models import VGG_embedding, resnet18_embedding, contrastive_resnet18, resnet50_embedding, convNext
-from utils.embedding_utils import seed_everything, collate_fn_none, create_stratified_splits, create_embedding_graphs, save_graph_statistics
+from models.embedding_models import VGG_embedding, resnet18_embedding, contrastive_resnet18, resnet50_embedding, convNext, GigaPath_embedding
+from utils.embedding_utils import seed_everything, collate_fn_none, create_embedding_graphs, save_graph_statistics
 
 # Set environment variables
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -58,21 +58,23 @@ def patch_embedding(args, logger):
             ]
         )
 
+    if args.embedding_net == 'GigaPath':
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ]
+        )
+
     # Load df with patient_id and corresponding labels here, to merge with extracted patches.
     patient_labels = pd.read_csv(args.directory + "/patient_labels.csv")
     # Load file with all extracted patches metadata and locations.
     extracted_patches = pd.read_csv(args.directory + "/extracted_patches_" + str(args.slide_level) + "/extracted_patches.csv")
 
     df = pd.merge(extracted_patches, patient_labels, on= args.patient_id)
-
     # Drop duplicates to obtain the actuals patient IDs that have a label assigned by the pathologist
     df_labels = df.drop_duplicates(subset= args.patient_id)
     ids = list(df_labels[args.patient_id])
-
-    sss_dict_name = args.directory + f"/train_test_strat_splits_{args.dataset_name}.pkl"
-    if not os.path.exists(sss_dict_name):
-        # create the dictionary containing the patient ID dictionary of the stratified random splits
-        create_stratified_splits(extracted_patches, patient_labels, args.patient_id, args.label, args.train_fraction, args.val_fraction, args.stratified_splits, args.seed, args.dataset_name, args.directory)
 
     # Create dictionary with patient ID as key and Dataloaders containing the corresponding patches as values.
     slides = Loaders().slides_dataloader(df, ids, transform, slide_batch= args.slide_batch, num_workers= args.num_workers, shuffle= False, collate= collate_fn_none, label= args.label, patient_id= args.patient_id)
@@ -92,16 +94,15 @@ def patch_embedding(args, logger):
     elif args.embedding_net == 'convnext':
         # Load weights for convnext
         embedding_net = convNext(embedding_vector_size=args.embedding_vector_size)
-    elif args.embedding_net == 'gigapath':
-        # Load weights for gigapath
-        embedding_net = timm.create_model('resnet50', pretrained=True) #reemplace
+    elif args.embedding_net == 'GigaPath':
+        embedding_net = GigaPath_embedding(args, embedding_vector_size=args.embedding_vector_size)
+
     elif args.embedding_net == 'UNI':
         # hf_hub_download("MahmoodLab/UNI", filename="pytorch_model.bin", local_dir=local_dir, force_download=True)
         # Load weights for uni
-        local_dir = r"C:\Users\Amaya\Documents\PhD\Data\WSI_foundation\UNI_weights"
         embedding_net = timm.create_model("vit_large_patch16_224", img_size=224, patch_size=16,
                                           init_values=1e-5, num_classes=0, dynamic_img_size=True)
-        embedding_net.load_state_dict(torch.load(os.path.join(local_dir, "pytorch_model.bin"),
+        embedding_net.load_state_dict(torch.load(os.path.join(args.embedding_weights, "UNI", "pytorch_model.bin"),
                                          map_location=device), strict=True)
 
     if use_gpu:

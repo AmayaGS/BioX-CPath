@@ -1,3 +1,4 @@
+import os
 import argparse
 
 from mains.main_tissue_segmentation import tissue_segmentation
@@ -6,20 +7,21 @@ from mains.main_rwpe import compute_rwpe
 from mains.main_train_test import train_model, test_model
 from mains.main_visualisation import visualise_results
 from utils.setup_utils import setup_results_and_logging, parse_dict
+from utils.model_utils import create_cross_validation_splits
 
 parser = argparse.ArgumentParser(description="Input arguments for applying KRAG to Whole Slide Images")
 
 # Input arguments for tissue segmentation and patching of Whole Slide Images
-parser.add_argument('--input_directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\R4RA_slides", help='Input data directory')
-parser.add_argument('--directory', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\Test_data_RA", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
+parser.add_argument('--input_directory', type=str, default= r"C:/Users/Amaya/Documents/PhD/Data/Test_Data_RA/R4RA_slides", help='Input data directory')
+parser.add_argument('--directory', type=str, default= r"C:/Users/Amaya/Documents/PhD/Data/Test_data_RA", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
 parser.add_argument('--dataset_name', type=str, default='RA', choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
 parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
 parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
 parser.add_argument('--coverage', type=float, default=0.4, help='Coverage (default: 0.3)')
-parser.add_argument('--slide_level', type=int, default=2, help='Slide level (default: 2)')
-parser.add_argument('--mask_level', type=int, default=2, help='Slide level (default: 3)')
+parser.add_argument('--slide_level', type=int, default=2, help='Slide level (default: 1)')
+parser.add_argument('--mask_level', type=int, default=2, help='Slide level (default: 2)')
 parser.add_argument('--unet', action='store_true', help='WIP, do not use yet - Calling this parameter will result in using UNet segmentation, rather than adaptive binary thresholding')
-parser.add_argument('--unet_weights', type=str, default= r"C:\Users\Amaya\Documents\PhD\Data\UNet_512_1.pth.tar", help='Path to model checkpoints')
+parser.add_argument('--unet_weights', type=str, default= r"C:/Users/Amaya/Documents/PhD/Data/UNet_512_1.pth.tar", help='Path to model checkpoints')
 parser.add_argument('--patch_batch_size', type=int, default=10, help='Batch size (default: 10)')
 parser.add_argument('--patient_ID_parsing', type=str, default='img.split("_")[0]', help='String parsing to obtain patient ID from image filename')
 parser.add_argument('--stain_parsing', type=str, default='img.split("_")[1]', help='String parsing to obtain stain type from image filename')
@@ -30,10 +32,11 @@ parser.add_argument("--label", type=str, default='label', help="Name of the targ
 parser.add_argument("--label_dict", type=parse_dict, default="{'0': 'Pauci-Immune', '1': 'Lymphoid/Myeloid'}", help="Dictionary mapping int labels to string labels")
 parser.add_argument("--patient_id", type=str, default='Patient_ID', help="Name of column containing the patient ID")
 parser.add_argument("--K", type=int, default=7, help="Number of nearest neighbours in k-NNG created from WSI embeddings")
+parser.add_argument("--num_layers", type=int, default=4, help="Number of layers in the GNN")
 parser.add_argument("--embedding_vector_size", type=int, default=1024, help="Embedding vector size")
 parser.add_argument("--stratified_splits", type=int, default=5, help="Number of random stratified splits")
 parser.add_argument("--embedding_net", type=str, default="UNI", choices=['resnet18', 'ssl_resnet18', 'vgg16', 'convnext', 'resnet50', 'UNI', 'GigaPath'], help="feature extraction network used")
-parser.add_argument("--embedding_weights", type=str, default=r"C:\Users\Amaya\Documents\PhD\MUSTANGv2\min_code_krag\tenpercent_resnet18.pt", help="Path to embedding weights")
+parser.add_argument("--embedding_weights", type=str, default=r"C:/Users/Amaya/Documents/PhD/Data/WSI_foundation/", help="Path to embedding weights")
 parser.add_argument("--train_fraction", type=float, default=0.8, help="Train fraction")
 parser.add_argument("--val_fraction", type=float, default=0.20, help="Validation fraction")
 parser.add_argument("--graph_mode", type=str, default="krag", choices=['knn', 'rag', 'krag'], help="Change type of graph used for training here")
@@ -64,22 +67,24 @@ parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size 
 parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
 parser.add_argument("--checkpoint", action="store_true", default=True, help="Enables checkpointing of GNN weights.")
 parser.add_argument("--l1_norm", type=int, default=0, help="L1-norm to regularise loss function")
+parser.add_argument("--hard_test", type=bool, default=False, help="If called, will test on the hardest test set")
 
 # visualisation of heatmaps & graph layers
-parser.add_argument("--path_to_patches", type=str, default=r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\extracted_patches_2\patches", help="Location of patches")
+parser.add_argument("--path_to_patches", type=str, default="/extracted_patches/patches", help="Location of patches")
 parser.add_argument("--test_fold", type=int, default=0, help="Test fold to generate heatmaps for")
 parser.add_argument("--test_ids", nargs="+", help="Specific test IDs to generate heatmaps for")
 parser.add_argument("--specific_ids", action="store_true", help="Generate heatmaps for specific test IDs")
 parser.add_argument("--per_layer", action='store_true', help="If called, will create heatmaps for each layer of the GNN.")
 
 # benchmarking against other models
-parser.add_argument("--model_name", type=str, default='KRAG', choices=['KRAG', 'CLAM', 'DeepGraphConv', 'PatchGCN', 'TransMIL', 'GTP', 'HEAT', 'CAMIL'])
+parser.add_argument("--model_name", type=str, default='KRAG', choices=['KRAG', 'MUSTANG', 'CLAM', 'DeepGraphConv', 'PatchGCN', 'TransMIL', 'GTP', 'HEAT', 'CAMIL'])
 
 # General arguments to determine if running preprocessing, training, testing, visualisation or benchmarking.
 parser.add_argument("--preprocess", action='store_true', help="Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.")
 parser.add_argument("--segmentation", action='store_true', help="Run tissue segmentation of WSI")
 parser.add_argument("--embedding", action='store_true', help="Run feature vector extraction of the WSI patches and creation of embedding & graph dictionaries [rag, knn or krag]")
 parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph")
+parser.add_argument("--create_splits", action='store_true', help="Create train/val/test splits")
 parser.add_argument("--train", action='store_true', help="Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
 parser.add_argument("--test", action='store_true', help="Run testing")
 parser.add_argument("--visualise", action='store_true', help="Run heatmap & graph visualisation for WSI, for each layer of the GNN or all together.")
@@ -109,6 +114,22 @@ def main(args):
         compute_rwpe(args, preprocess_logger)
         preprocess_logger.info("Done running pre-compute of Random Walk positional encoding on the graph")
 
+        preprocess_logger.info("Creating train/val/test splits")
+        sss_dict_path = os.path.join(args.directory, f"train_test_strat_splits_{args.dataset_name}.pkl")
+        if not os.path.exists(sss_dict_path):
+            create_cross_validation_splits(
+                args,
+                patient_id=args.patient_id,
+                label=args.label,
+                test_size=1-args.train_fraction,
+                n_splits=args.stratified_splits,
+                seed=args.seed,
+                dataset_name=args.dataset_name,
+                directory=args.directory,
+                hard_test_set=args.hard_test
+            )
+        preprocess_logger.info("Done creating train/val/test splits")
+
     # Run the preprocessing steps individually if needed
     if args.segmentation:
         # Setup logging
@@ -133,6 +154,25 @@ def main(args):
         # Run pre-compute of Random Walk positional encoding on the graph
         compute_rwpe(args, preprocess_logger)
         preprocess_logger.info("Done running pre-compute of Random Walk positional encoding on the graph")
+
+    if args.create_splits:
+        # Setup logging
+
+        _, preprocess_logger = setup_results_and_logging(args, "_preprocess")
+        preprocess_logger.info("Creating train/val/test splits")
+        sss_dict_path = os.path.join(args.directory, f"train_test_strat_splits_{args.dataset_name}.pkl")
+        if not os.path.exists(sss_dict_path):
+            create_cross_validation_splits(
+                args,
+                patient_id=args.patient_id,
+                label=args.label,
+                test_size=1-args.train_fraction,
+                n_splits=args.stratified_splits,
+                seed=args.seed,
+                dataset_name=args.dataset_name,
+                directory=args.directory
+            )
+        preprocess_logger.info("Done creating train/val/test splits")
 
     # Run training of the self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
     if args.train:

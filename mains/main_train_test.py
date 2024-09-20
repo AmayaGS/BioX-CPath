@@ -5,6 +5,7 @@ import os
 import os.path
 import time
 import pandas as pd
+import pickle
 
 # PyTorch
 import torch
@@ -14,7 +15,7 @@ from torch_geometric.loader import DataLoader
 
 # KRAG functions
 from train_test_loops.krag_train_val_loop import train_val_loop
-from train_test_loops.krag_test_loop import test_loop
+from train_test_loops.krag_test_loop import test_loop, ensemble_test_results
 from utils.setup_utils import seed_everything
 from utils.profiling_utils import train_profiler, test_profiler
 from utils.model_utils import load_data, minority_sampler, prepare_data_loaders, initialise_model
@@ -34,17 +35,6 @@ def train_model(args, results_dir, logger):
 
     mean_best_acc = []
     mean_best_AUC = []
-
-    # training_folds = []
-    # validation_folds = []
-    # for folds, splits in sss_folds.items():
-    #     for i, (split, patient_ids) in enumerate(splits.items()):
-    #         if i == 0:
-    #             train_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-    #             training_folds.append(train_dict)
-    #         if i== 1:
-    #             val_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-    #             validation_folds.append(val_dict)
 
     training_folds, validation_folds, _ = prepare_data_loaders(data_dict, sss_folds)
 
@@ -97,14 +87,6 @@ def train_model(args, results_dir, logger):
 def test_model(args, results_dir, logger):
     run_settings, checkpoints, data_dict, sss_folds = load_data(args, results_dir)
 
-    # testing_folds = []
-    # for fold, splits in sss_folds.items():
-    #     # print(f"Processing fold {fold + 1}/{len(splits)}")
-    #     for i, (split, patient_ids) in enumerate(splits.items()):
-    #         if i == 2:
-    #             test_dict = dict(filter(lambda i:i[0] in patient_ids, graph_dict.items()))
-    #             testing_folds.append(test_dict)
-
     _, _, testing_folds = prepare_data_loaders(data_dict, sss_folds)
 
     all_results = []
@@ -134,8 +116,13 @@ def test_model(args, results_dir, logger):
         all_results.append(test_results)
         plot_roc_curve(test_results, args.n_classes, fold_idx, results_dir)
 
+        with open(f"{results_dir}/results_fold_{fold_idx}.pkl", 'wb') as f:
+            pickle.dump(test_results, f)
+
     summarise_test_results(all_results, results_dir, logger, args)
 
     logger.info("Inference Profiling Results:")
     test_profiler.report(is_training=False)
+
+    ensemble_test_results(args, results_dir, all_results, logger)
 

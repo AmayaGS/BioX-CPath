@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc, precision_recall_curve
+import seaborn as sns
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, confusion_matrix, average_precision_score
 from sklearn.preprocessing import label_binarize
 
 
@@ -83,8 +84,8 @@ def plot_averaged_results(all_results, save_path):
 def plot_roc_curve(results_dict, n_classes, fold, save_path):
     plt.figure(figsize=(10, 8))
 
-    all_labels = results_dict['all_labels']
-    all_probs = results_dict['all_probs']
+    all_labels = results_dict['labels']
+    all_probs = results_dict['probs']
 
     if n_classes == 2:
         fpr, tpr, _ = roc_curve(all_labels, all_probs[:, 1])
@@ -141,8 +142,8 @@ def plot_average_roc_curve(all_results, n_classes, save_path):
         aucs = []
 
         for result in all_results:
-            all_labels = result['all_labels']
-            all_probs = result['all_probs']
+            all_labels = result['labels']
+            all_probs = result['probs']
 
             if n_classes == 2:
                 fpr, tpr, _ = roc_curve(all_labels, all_probs[:, 1])
@@ -192,8 +193,8 @@ def plot_average_pr_curve(all_results, n_classes, save_path):
         total_samples = 0
 
         for result in all_results:
-            all_labels = result['all_labels']
-            all_probs = result['all_probs']
+            all_labels = result['labels']
+            all_probs = result['probs']
 
             if n_classes == 2:
                 precision, recall, _ = precision_recall_curve(all_labels, all_probs[:, 1])
@@ -240,4 +241,120 @@ def plot_average_pr_curve(all_results, n_classes, save_path):
     plt.legend(loc="lower left")
 
     plt.savefig(f"{save_path}/average_pr_curve.png")
+    plt.close()
+
+
+def plot_ensemble_roc_curve(true_labels, ensemble_probs, n_classes, results_dir):
+    plt.figure(figsize=(10, 8))
+
+    if n_classes == 2:
+        fpr, tpr, _ = roc_curve(true_labels, ensemble_probs[:, 1])
+        roc_auc = auc(fpr, tpr)
+
+        plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    else:
+        for i in range(n_classes):
+            fpr, tpr, _ = roc_curve((true_labels == i).astype(int), ensemble_probs[:, i])
+            roc_auc = auc(fpr, tpr)
+            plt.plot(fpr, tpr, lw=2, label=f'ROC curve of class {i} (AUC = {roc_auc:.2f})')
+
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve - Ensemble')
+    plt.legend(loc="lower right")
+    plt.savefig(f"{results_dir}/ensemble_roc_curve.png")
+    plt.close()
+
+
+def plot_ensemble_confusion_matrix(true_labels, ensemble_preds, n_classes, results_dir):
+    cm = confusion_matrix(true_labels, ensemble_preds)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix - Ensemble')
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(f"{results_dir}/ensemble_confusion_matrix.png")
+    plt.close()
+
+
+def plot_performance_comparison(all_results, ensemble_results, results_dir):
+    metrics = ['accuracy', 'auc']
+    fold_performances = {metric: [result[f'test_{metric}'] for result in all_results] for metric in metrics}
+
+    plt.figure(figsize=(15, 7))  # Increased height slightly
+    for i, metric in enumerate(metrics):
+        plt.subplot(1, 2, i + 1)
+
+        # Plot individual fold results
+        bp = plt.boxplot(fold_performances[metric], positions=[0], widths=0.6, patch_artist=True)
+        for element in ['boxes', 'whiskers', 'fliers', 'means', 'caps']:
+            plt.setp(bp[element], color='blue')
+        plt.setp(bp['boxes'], facecolor='lightblue')
+        plt.setp(bp['medians'], color='red')  # Make median line red for visibility
+
+        # Remove outlier symbols (empty dots)
+        plt.setp(bp['fliers'], marker='')
+
+        # Plot ensemble result
+        ensemble_value = ensemble_results[metric]
+        plt.plot(0, ensemble_value, 'ro', markersize=10, label='Ensemble')
+
+        # Add text annotations
+        plt.text(0, plt.ylim()[1], f'Ensemble: {ensemble_value:.4f}',
+                 horizontalalignment='center', verticalalignment='bottom',
+                 fontweight='bold', fontsize=10, color='red')
+
+        plt.title(f'{metric.upper()} Comparison', pad=20)  # Increase padding for title
+        plt.xticks([0], [''])
+        plt.ylabel(metric.upper())
+
+        # Adjust y-axis limits to prevent overlap
+        ymin, ymax = plt.ylim()
+        plt.ylim(ymin, ymax + (ymax - ymin) * 0.1)  # Add 10% padding at the top
+
+        # Add a legend
+        plt.legend([bp["boxes"][0], bp["medians"][0], plt.plot([], [], 'ro')[0]],
+                   ['Individual Folds', 'Median', 'Ensemble'],
+                   loc='lower right')
+
+    plt.tight_layout()
+    plt.savefig(f"{results_dir}/performance_comparison.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_ensemble_pr_curve(true_labels, ensemble_probs, n_classes, results_dir):
+    plt.figure(figsize=(10, 8))
+
+    if n_classes == 2:
+        precision, recall, _ = precision_recall_curve(true_labels, ensemble_probs[:, 1])
+        avg_precision = average_precision_score(true_labels, ensemble_probs[:, 1])
+
+        plt.plot(recall, precision, color='darkorange', lw=2,
+                 label=f'Precision-Recall curve (AP = {avg_precision:.2f})')
+
+        # Add chance line
+        no_skill = len(true_labels[true_labels == 1]) / len(true_labels)
+        plt.plot([0, 1], [no_skill, no_skill], linestyle='--', color='red', label='Chance')
+    else:
+        for i in range(n_classes):
+            precision, recall, _ = precision_recall_curve((true_labels == i).astype(int), ensemble_probs[:, i])
+            avg_precision = average_precision_score((true_labels == i).astype(int), ensemble_probs[:, i])
+            plt.plot(recall, precision, lw=2,
+                     label=f'Class {i} (AP = {avg_precision:.2f})')
+
+        # Add chance line for multi-class (average of class proportions)
+        class_proportions = [np.mean(true_labels == i) for i in range(n_classes)]
+        no_skill = np.mean(class_proportions)
+        plt.plot([0, 1], [no_skill, no_skill], linestyle='--', color='red', label='Chance')
+
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve - Ensemble')
+    plt.legend(loc="lower left")
+    plt.savefig(f"{results_dir}/ensemble_pr_curve.png")
     plt.close()

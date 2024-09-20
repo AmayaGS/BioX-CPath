@@ -187,7 +187,7 @@ def save_patches(image_dir,
     mask_dir = os.path.join(output_dir, 'masks')
     contours_dir = os.path.join(output_dir, 'contours')
     thumbnails_dir = os.path.join(output_dir, 'thumbnails')
-    results_dir = os.path.join(output_dir, f'results_{slide_level}')
+    results_dir = os.path.join(output_dir, f'extracted_patches_{slide_level}')
     patches_dir = os.path.join(results_dir, 'patches')
     filename = os.path.join(results_dir, 'extracted_patches.csv')
 
@@ -265,6 +265,7 @@ def save_patches(image_dir,
                 plt.imsave(thumbnail_path + '.png', thumbnail)
 
             if os.path.exists(mask_path):
+                logger.info("Loading pre-existing mask.")
 
                 mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE) # TODO add tifffile reader here maybe
                 # in case the image is actually in grayscale, pass it to 0 and 1
@@ -272,11 +273,13 @@ def save_patches(image_dir,
                 _,mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
             if not os.path.exists(mask_path) and not unet:
+                logger.info("No mask on file. Creating adaptive binary thresholding mask.")
 
                 mask = tresh_binary_mask(slide, mask_path, contour_path, mask_level)
                 mask = cv2.resize(mask, (width, height))
 
             if not os.path.exists(mask_path) and unet:
+                logger.info("No mask on file. Creating unet binary mask.")
 
                 mask = unet_binary_mask(model, transform, slide, mask_path, contour_path, mask_level, batch_size, patch_size)
                 mask = cv2.resize(mask, (width, height))
