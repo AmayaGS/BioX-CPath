@@ -86,7 +86,7 @@ class pooling_network(torch.nn.Module):
         self.pool3 = SAGPooling(hidden_dim, self.pooling_ratio)
         self.pool4 = SAGPooling(hidden_dim, self.pooling_ratio)
 
-    def forward(self, data, filenames):
+    def forward(self, args, data, filenames):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
         original_node_attr = data.node_attr
         original_edge_attr = edge_attr.clone()
@@ -98,7 +98,7 @@ class pooling_network(torch.nn.Module):
             rwpe = data.random_walk_pe
 
         # Initialize attention patient_graphs for each layer and a cumulative score
-        attention_scores_per_layer = [[None for _ in range(len(filenames))] for _ in range(4)]
+        attention_scores_per_layer = [[None for _ in range(len(filenames))] for _ in range(len(args.num_layers))]
         cumulative_attention_scores = [None for _ in range(len(filenames))]
 
         # Create initial node mapping

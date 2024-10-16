@@ -32,7 +32,7 @@ def process_model_output(args, output, loss_fn):
         return logits, Y_prob, Y_hat, loss
 
     elif args.model_name == 'MUSTANG':
-        logits, Y_prob, label = output
+        logits, Y_prob, layer_attention, label = output
         Y_hat = torch.argmax(Y_prob, dim=1)
         loss = loss_fn(logits, label)
         return logits, Y_prob, Y_hat, loss
@@ -244,17 +244,12 @@ def initialise_model(args):
                                 conv_type=args.convolution,
                                 num_layers=args.num_layers)
     elif args.model_name == 'MUSTANG':
-        model = MUSTANG_Classifier(args.embedding_vector_size,
-                                   edge_attr_dim=1,
-                                   node_attr_dim=1,
-                                   hidden_dim=args.hidden_dim,
-                                   num_classes=args.n_classes,
-                                   heads=args.heads,
-                                   pooling_ratio=args.pooling_ratio,
-                                   walk_length=args.encoding_size,
-                                   conv_type=args.convolution,
-                                   num_layers=args.num_layers,
-                                   embedding_dim=10)
+        model = MUSTANG_Classifier(in_features=args.embedding_vector_size, edge_attr_dim=len(args.edge_types),
+                                   node_attr_dim=len(args.stain_types), hidden_dim=args.hidden_dim,
+                                   num_classes=args.n_classes, heads=args.heads, pooling_ratio=args.pooling_ratio,
+                                   walk_length=args.encoding_size, conv_type=args.convolution,
+                                   num_layers=args.num_layers, embedding_dim=10, dropout_rate=args.dropout,
+                                   use_node_embedding=args.use_node_embedding, use_edge_embedding=args.use_edge_embedding, use_attention=args.use_attention)
     elif args.model_name == 'CLAM':
         model = CLAM(args.embedding_vector_size)
     elif args.model_name == 'DeepGraphConv':
@@ -300,24 +295,40 @@ def summarise_train_results(all_results, mean_best_acc, mean_best_AUC, results_d
         'val_AUC': [average_best_AUC, std_best_AUC]
     }, index=['mean', 'std']).T
 
-    summary_path = f"{results_dir}/{run_settings}_train_summary_scores.csv"
+    summary_path = f"{results_dir}/train_summary_scores.csv"
     summary_df.to_csv(summary_path, index=True)
 
 def summarise_test_results(all_results, results_dir, logger, args):
     accuracies = [r['test_accuracy'] for r in all_results]
     aucs = [r['test_auc'] for r in all_results]
+    precisions = [r['test_avg_precision'] for r in all_results]
+    f1_scores = [r['test_f1'] for r in all_results]
+    recalls = [r['test_recall'] for r in all_results]
+    macro_precisions = [r['test_precision'] for r in all_results]
 
-    # Calculate averages and standard deviations
+    # Calculate averages and standard errors
     avg_accuracy = np.mean(accuracies)
-    std_accuracy = np.std(accuracies)
+    sem_accuracy = np.std(accuracies) / np.sqrt(np.size(accuracies))
     avg_auc = np.mean(aucs)
-    std_auc = np.std(aucs)
-
+    sem_auc = np.std(aucs) / np.sqrt(np.size(aucs))
+    avg_ap = np.mean(precisions)
+    sem_ap = np.std(precisions) / np.sqrt(np.size(precisions))
+    avg_f1 = np.mean(f1_scores)
+    sem_f1 = np.std(f1_scores) / np.sqrt(np.size(f1_scores))
+    avg_recall = np.mean(recalls)
+    sem_recall = np.std(recalls) / np.sqrt(np.size(recalls))
+    avg_macro_precision = np.mean(macro_precisions)
+    sem_macro_precision = np.std(macro_precisions) / np.sqrt(np.size(macro_precisions))
+    #
     # Create summary dataframe
     summary_df = pd.DataFrame({
-        'test_accuracy': [avg_accuracy, std_accuracy],
-        'test_AUC': [avg_auc, std_auc]
-    }, index=['mean', 'std']).T
+        'test_accuracy': [avg_accuracy, sem_accuracy],
+        'test_AUC': [avg_auc, sem_auc],
+        'test_AP': [avg_ap, sem_ap],
+        'test_F1': [avg_f1, sem_f1],
+        'test_recall': [avg_recall, sem_recall],
+        'test_precision': [avg_macro_precision, sem_macro_precision]
+    }, index=['mean', 'SE']).T
 
     config = get_model_config(args)
 
@@ -327,11 +338,27 @@ def summarise_test_results(all_results, results_dir, logger, args):
         f"_{args.embedding_net}_{args.dataset_name}_{args.seed}_{config['heads']}_{config['pooling_ratio']}"
         f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}")
 
-    summary_path = f"{results_dir}/{run_settings}_test_summary_scores.csv"
+    summary_path = f"{results_dir}/test_summary_scores.csv"
     summary_df.to_csv(summary_path, index=True)
 
-    logger.info(f"Average Test Accuracy: {avg_accuracy:.4f} +/- {std_accuracy:.4f}")
-    logger.info(f"Average Test AUC: {avg_auc:.4f} +/- {std_auc:.4f}")
+    # Log results
+    logger.info(f"Average Test Accuracy: {avg_accuracy:.4f} +/- {sem_accuracy:.4f}")
+    logger.info(f"Average Test AUC: {avg_auc:.4f} +/- {sem_auc:.4f}")
+    logger.info(f"Average AP: {avg_ap:.4f} +/- {sem_ap:.4f}")
+    logger.info(f"Average F1 Score: {avg_f1:.4f} +/- {sem_f1:.4f}")
+    logger.info(f"Average Recall: {avg_recall:.4f} +/- {sem_recall:.4f}")
+    logger.info(f"Average Precision: {avg_macro_precision:.4f} +/- {sem_macro_precision:.4f}")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    # Plot average confusion matrix
+    avg_cm = np.mean([r['confusion_matrix'] for r in all_results], axis=0)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(avg_cm / np.sum(avg_cm, axis=1)[:, None], annot=True, fmt='.2f', cmap='Blues')
+    plt.title('Average Normalized Confusion Matrix')
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(f"{results_dir}/{run_settings}_confusion_matrix.png")
+    plt.close()
 
     # Plot average curves
     plot_average_roc_curve(all_results, args.n_classes, results_dir)

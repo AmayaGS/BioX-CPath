@@ -1,15 +1,5 @@
-# -*- coding: utf-8 -*-
-
-"""
-Created on Wed Feb 28 19:45:09 2024
-
-@author: AmayaGS
-"""
-
 # Misc
 import os
-from multiprocessing import process
-
 import pandas as pd
 import pickle
 
@@ -27,7 +17,9 @@ from torchvision import transforms
 
 # KRAG functions
 from utils.dataloaders_utils import Loaders
-from models.embedding_models import VGG_embedding, resnet18_embedding, contrastive_resnet18, resnet50_embedding, convNext, GigaPath_embedding
+from models.embedding_models import VGG_embedding, resnet18_embedding, resnet50_embedding, convNext
+from models.embedding_models import contrastive_resnet18
+from models.embedding_models import GigaPath_embedding, UNI_embedding, BiOptimus_embedding, Phikon_embedding
 from utils.embedding_utils import seed_everything, collate_fn_none, create_embedding_graphs, save_graph_statistics
 
 # Set environment variables
@@ -44,25 +36,22 @@ def patch_embedding(args, logger):
     # Set seed
     seed_everything(args.seed)
 
-    # Image transforms
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    # ImageNet transforms - good for UNI, GigaPath, Phikon
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])
+        ]
+    )
 
-    if args.embedding_net == 'UNI':
+
+    if args.embedding_net == 'BiOptimus':
         transform = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ]
-        )
-
-    if args.embedding_net == 'GigaPath':
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                transforms.Normalize(mean=[0.707223, 0.578729, 0.703617],
+                                    std=[0.211883, 0.230117, 0.177517])
             ]
         )
 
@@ -84,8 +73,12 @@ def patch_embedding(args, logger):
         embedding_net = resnet18_embedding(embedding_vector_size=args.embedding_vector_size)
     if args.embedding_net == 'ssl_resnet18':
         # Load weights for pretrained resnet18
-        embedding_net = contrastive_resnet18(embedding_vector_size=args.embedding_vector_size)
+        weight_path = os.path.join(args.embedding_weights, "Ciga", "tenpercent_resnet18.pt")
+        embedding_net = contrastive_resnet18(weight_path, embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'resnet50':
+        # Load weights for resnet 50
+        embedding_net = resnet50_embedding(embedding_vector_size=args.embedding_vector_size)
+    elif args.embedding_net == 'ssl_resnet50':
         # Load weights for resnet 50
         embedding_net = resnet50_embedding(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'vgg16':
@@ -94,16 +87,25 @@ def patch_embedding(args, logger):
     elif args.embedding_net == 'convnext':
         # Load weights for convnext
         embedding_net = convNext(embedding_vector_size=args.embedding_vector_size)
+    elif args.embedding_net == 'CTransPath':
+        # Load weights for CTransPath
+        weight_path = os.path.join(args.embedding_weights, "CTransPath", "ctranspath.pth")
+        embedding_net = CTransPath_embedding(weight_path, embedding_vector_size=args.embedding_vector_size)
+    elif args.embedding_net == 'Lunit':
+        # Load weights for Lunit
+        embedding_net = Lunit_embedding(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'GigaPath':
-        embedding_net = GigaPath_embedding(args, embedding_vector_size=args.embedding_vector_size)
-
+        # Load weights for GigaPath
+        embedding_net = GigaPath_embedding(embedding_vector_size=args.embedding_vector_size)
+    elif args.embedding_net == 'Phikon':
+        # Load weights for Phikon
+        embedding_net = Phikon_embedding(embedding_vector_size=args.embedding_vector_size)
+    elif args.embedding_net == 'BiOptimus':
+        # Load weights for BioOptimus
+        embedding_net = BiOptimus_embedding(embedding_vector_size=args.embedding_vector_size)
     elif args.embedding_net == 'UNI':
-        # hf_hub_download("MahmoodLab/UNI", filename="pytorch_model.bin", local_dir=local_dir, force_download=True)
-        # Load weights for uni
-        embedding_net = timm.create_model("vit_large_patch16_224", img_size=224, patch_size=16,
-                                          init_values=1e-5, num_classes=0, dynamic_img_size=True)
-        embedding_net.load_state_dict(torch.load(os.path.join(args.embedding_weights, "UNI", "pytorch_model.bin"),
-                                         map_location=device), strict=True)
+        # Load weights for UNI
+        embedding_net = UNI_embedding(embedding_vector_size=args.embedding_vector_size)
 
     if use_gpu:
          embedding_net.cuda()

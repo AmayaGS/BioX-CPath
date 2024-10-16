@@ -6,7 +6,7 @@ import gc
 gc.enable()
 
 
-def heatmap_scores(graph_net, test_loader, patient_ID, loss_fn, n_classes):
+def heatmap_scores(args, graph_net, test_loader, patient_ID, loss_fn, n_classes):
     graph_net.eval()
     attention_scores= {}
     layer_data_dict = {}
@@ -20,7 +20,7 @@ def heatmap_scores(graph_net, test_loader, patient_ID, loss_fn, n_classes):
         if use_gpu:
             data, label = data.cuda(), label.cuda()
 
-    logits, Y_prob, all_patches_per_layer, all_patches_cumulative, layer_data = graph_net(data, filenames)
+    logits, Y_prob, all_patches_per_layer, all_patches_cumulative, layer_data = graph_net(args, data, filenames)
 
     attention_scores[patient_ID] = {
         'per_layer': all_patches_per_layer,

@@ -3,8 +3,10 @@ import time
 from collections import defaultdict
 
 import numpy as np
-from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix
+
 from sklearn.preprocessing import label_binarize
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, classification_report
+from sklearn.metrics import average_precision_score
 
 import torch
 
@@ -28,7 +30,7 @@ def train_val_loop(args, model, train_loader, val_loader, loss_fn, optimizer, re
 
     results_dict = {
         'train_loss': [], 'train_accuracy': [],
-        'val_loss': [], 'val_accuracy': [], 'val_auc': []
+        'val_loss': [], 'val_accuracy': [], 'val_auc': [], 'val_precision': []
     }
 
     for epoch in range(num_epochs):
@@ -41,7 +43,7 @@ def train_val_loop(args, model, train_loader, val_loader, loss_fn, optimizer, re
                                                                             loss_fn,
                                                                             optimizer,
                                                                             n_classes)
-        val_loss, val_accuracy, val_auc, conf_matrix, class_report = eval_loop(args,
+        val_loss, val_accuracy, val_auc, val_pr, conf_matrix, class_report = eval_loop(args,
                                                                                model,
                                                                                val_loader,
                                                                                loss_fn,
@@ -54,6 +56,7 @@ def train_val_loop(args, model, train_loader, val_loader, loss_fn, optimizer, re
         results_dict['val_loss'].append(val_loss)
         results_dict['val_accuracy'].append(val_accuracy)
         results_dict['val_auc'].append(val_auc)
+        results_dict['val_precision'].append(val_pr)
 
         logger.info(f"\n{'=' * 25} Split {fold} {'=' * 25}")
         logger.info(f"Epoch {epoch + 1}/{num_epochs}")
@@ -99,7 +102,9 @@ def train_loop(args, model, train_loader, loss_fn, optimizer, n_classes):
 
     model.train()
 
-    for patient_ID, data_object in train_loader.dataset.items():
+    #gradient_accumulation = 5
+
+    for i, (patient_ID, data_object) in enumerate(train_loader.dataset.items()):
         train_profiler.update_peak_memory()
         data, label, _ = data_object
         if use_gpu:
@@ -107,8 +112,13 @@ def train_loop(args, model, train_loader, loss_fn, optimizer, n_classes):
 
         logits, Y_prob, predicted, loss = process_model_output(args, model(data, label), loss_fn)
         optimizer.zero_grad()
+        # loss = loss / gradient_accumulation
         loss.backward()
         optimizer.step()
+
+        # if (i + 1) % gradient_accumulation == 0:
+        #     optimizer.step()
+        #     optimizer.zero_grad()
 
         train_loss += loss.item()
         train_total += label.size(0)
@@ -170,15 +180,20 @@ def eval_loop(args, model, val_loader, loss_fn, n_classes):
 
     if n_classes == 2:
         val_auc = roc_auc_score(all_labels, all_probs[:, 1])
+        val_precision = average_precision_score(all_labels, all_probs[:, 1])
     else:
         binary_labels = label_binarize(all_labels, classes=range(n_classes))
         val_auc = roc_auc_score(binary_labels, all_probs, average='macro', multi_class='ovr')
+        all_preds = np.argmax(all_probs, axis=1)
+        val_precision = average_precision_score(all_labels,
+                                                label_binarize(all_preds, classes=range(args.n_classes)),
+                                                average='macro')
 
     predicted_labels = np.argmax(all_probs, axis=1)
     conf_matrix = confusion_matrix(all_labels, np.argmax(all_probs, axis=1))
     class_report = classification_report(all_labels, predicted_labels, zero_division=0)
 
-    return val_loss, val_accuracy, val_auc, conf_matrix, class_report
+    return val_loss, val_accuracy, val_auc, val_precision, conf_matrix, class_report
 
 
 

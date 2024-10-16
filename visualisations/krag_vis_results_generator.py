@@ -56,8 +56,7 @@ class KRAGResultsGenerator:
                 self.logger.info(f"Warning: Patient ID {patient_id} not found in graph dictionary. Skipping.")
                 continue
 
-            data_path = os.path.join(vis_path,
-                                     f"patient_data_{self.args.graph_mode}_fold_{fold}_{patient_id}_{self.args.dataset_name}.pkl")
+            data_path = os.path.join(vis_path, f"patient_data_{self.args.graph_mode}_fold_{fold}_{patient_id}_{self.args.dataset_name}.pkl")
 
             if os.path.exists(data_path):
                 self.logger.info(f"Loading existing data for patient: {patient_id}")
@@ -65,7 +64,7 @@ class KRAGResultsGenerator:
                     patient_data = pickle.load(f)
             else:
                 self.logger.info(f"Calculating data for patient: {patient_id}")
-                patient_data = self._calculate_patient_data(patient_id, graph_dict, graph_net)
+                patient_data = self._calculate_patient_data(self.args, patient_id, graph_dict, graph_net)
                 with open(data_path, 'wb') as f:
                     pickle.dump(patient_data, f)
 
@@ -106,7 +105,7 @@ class KRAGResultsGenerator:
         test_graph_loader = DataLoader(slide_embedding, batch_size=1, shuffle=False,
                                        num_workers=self.args.num_workers)
 
-        actual_label, predicted_label, metadata, attention_scores, layer_data = heatmap_scores(
+        actual_label, predicted_label, metadata, attention_scores, layer_data = heatmap_scores(self.args,
             graph_net, test_graph_loader, patient_id, self.loss_fn, n_classes=self.args.n_classes
         )
 
@@ -129,6 +128,7 @@ class KRAGResultsGenerator:
         return patient_graphs
 
     def _create_networkx_graph(self, data):
+        # Convert torch geometric data to networkx graph. THIS DOES NOT CONSERVE THE EDGE AND NODE INDEXES!!!
         G = to_networkx(data, to_undirected=False)
 
         node_scores = data.node_att_scores.cpu().detach().numpy()

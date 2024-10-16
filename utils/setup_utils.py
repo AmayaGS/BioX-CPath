@@ -1,14 +1,7 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Jan 24 14:03:24 2023
-
-@author: AmayaGS
-
-"""
-
 # Misc
 import os
 import logging
+from datetime import datetime
 import argparse
 import ast
 
@@ -52,6 +45,8 @@ MODEL_CONFIGS = {
         'heads': 0,
         'pooling_ratio': 0,
         'model_class': CLAM,
+        'use_attention': False,
+        'dropout': 0.5,
         'use_args': False
     },
     'TransMIL': {
@@ -61,6 +56,8 @@ MODEL_CONFIGS = {
         'heads': 8,
         'pooling_ratio': 0,
         'model_class': TransMIL,
+        'use_attention': False,
+        'dropout': 0.5,
         'use_args': False
     },
     'PatchGCN': {
@@ -70,6 +67,8 @@ MODEL_CONFIGS = {
         'heads': 0,
         'pooling_ratio': 0,
         'model_class': PatchGCN,
+        'use_attention': False,
+        'dropout': 0.5,
         'use_args': False
     },
     'DeepGraphConv': {
@@ -79,6 +78,8 @@ MODEL_CONFIGS = {
         'heads': 0,
         'pooling_ratio': 0,
         'model_class': DeepGraphConv,
+        'use_attention': False,
+        'dropout': 0.5,
         'use_args': False
     },
     'GTP': {
@@ -88,6 +89,8 @@ MODEL_CONFIGS = {
         'heads': 0,
         'pooling_ratio': 0,
         'model_class': GTP_Classifier,
+        'use_attention': False,
+        'dropout': 0.5,
         'use_args': False
     }
 }
@@ -102,17 +105,20 @@ def get_model_config(args):
         config['encoding_size'] = args.encoding_size
         config['heads'] = args.heads
         config['pooling_ratio'] = args.pooling_ratio
+        config['use_attention'] = args.use_attention
+        config['dropout'] = args.dropout
     return config
 
 
 def setup_results_and_logging(args, log_type):
     current_directory = args.directory
     config = get_model_config(args)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     run_results_folder = (
         f"{args.model_name}_{config['graph_mode']}_{config['convolution']}_PE_{config['encoding_size']}"
         f"_{args.embedding_net}_{args.dataset_name}_{args.seed}_{config['heads']}_{config['pooling_ratio']}"
-        f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_L1_{args.l1_norm}")
+        f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_NE_{args.use_node_embedding}_EE_{args.use_edge_embedding}_SAL_{config['use_attention']}_2dr_{config['dropout']}_2LL")
 
     results_dir = os.path.join(current_directory, "results", run_results_folder)
     os.makedirs(results_dir, exist_ok=True)

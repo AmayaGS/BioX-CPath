@@ -1,5 +1,4 @@
 
-import numpy as np
 from collections import defaultdict
 import pickle
 
@@ -9,7 +8,7 @@ from utils.profiling_utils import test_profiler
 from utils.model_utils import process_model_output
 from utils.plotting_functions_utils import *
 
-from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, classification_report
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score, roc_auc_score, confusion_matrix, classification_report
 from sklearn.preprocessing import label_binarize
 
 use_gpu = torch.cuda.is_available()
@@ -59,14 +58,22 @@ def test_loop(args, model, test_loader, loss_fn, n_classes, logger, fold):
     # Compute AUC
     if n_classes == 2:
         test_auc = roc_auc_score(all_labels, all_probs[:, 1])
+        avg_precision = average_precision_score(all_labels, all_probs[:, 1])
     else:
         binary_labels = label_binarize(all_labels, classes=range(n_classes))
         test_auc = roc_auc_score(binary_labels, all_probs, average='macro', multi_class='ovr')
+        all_preds = np.argmax(all_probs, axis=1)
+        avg_precision = average_precision_score(all_labels,
+                                                label_binarize(all_preds, classes=range(args.n_classes)),
+                                                average='macro')
 
     # Compute confusion matrix and classification report
     predicted_labels = np.argmax(all_probs, axis=1)
     conf_matrix = confusion_matrix(all_labels, predicted_labels)
     class_report = classification_report(all_labels, predicted_labels, zero_division=0)
+
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, predicted_labels, average='macro',
+                                                               zero_division=0)
 
     # Logging results
     logger.info(f"\n{'=' * 25} Split {fold} {'=' * 25}")
@@ -74,6 +81,10 @@ def test_loop(args, model, test_loader, loss_fn, n_classes, logger, fold):
     logger.info(f"Test Loss: {test_loss:.4f}")
     logger.info(f"Test Accuracy: {test_accuracy:.4f}")
     logger.info(f"Test AUC: {test_auc:.4f}")
+    logger.info(f"Test Average Precision: {avg_precision:.4f}")
+    logger.info(f"Test Precision (macro): {precision:.4f}")
+    logger.info(f"Test Recall (macro): {recall:.4f}")
+    logger.info(f"Test F1 Score (macro): {f1:.4f}")
     for i in range(n_classes):
         logger.info(f"Class {i}: {class_correct[i]}/{class_total[i]}")
     logger.info(f"\n{conf_matrix}")
@@ -83,6 +94,10 @@ def test_loop(args, model, test_loader, loss_fn, n_classes, logger, fold):
         'test_loss': test_loss,
         'test_accuracy': test_accuracy,
         'test_auc': test_auc,
+        'test_avg_precision': avg_precision,
+        'test_precision': precision,
+        'test_recall': recall,
+        'test_f1': f1,
         'probs': all_probs,
         'preds': predicted_labels,
         'labels': all_labels,
