@@ -27,7 +27,7 @@ KRAG is a self-attention hierarchical graph multiple instance learning pipeline,
 
 ### General Requirements
 - Python 3.11.7
-- NVIDIA GPU with CUDA 12.5
+- NVIDIA GPU with CUDA 12.4
 
 ### Virtual Environment
 To get started, first create a virtual environment and install the required packages:
