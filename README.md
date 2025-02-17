@@ -23,22 +23,33 @@ KRAG is a self-attention hierarchical graph multiple instance learning pipeline,
 - **Hierarchical Graph classification.** The KRAG is successively passed through four Graph Attention Network layers (GAT) and SAGPooling layers. The SAGPooling readouts from each layer are concatenated and passed through three MLP layers. This concatenated vector is passed through a self-attention head and finally classified.
 - **Heatmap generation.** Sagpool scores.
 
-## Set Up
+## Setup
 
-### General Requirements
+First clone the repository to the desire location and enter the directory:
+
+```bash
+# clone project to desired location
+git clone https://github.com/AmayaGS/BioX-CPath
+cd BioX-CPath
+```
+
+Then create a virtual environmemt and install the requirements.txt
+
+#### General Requirements
 - Python 3.11.7
+- PyTorch 2.5
 - NVIDIA GPU with CUDA 12.4
 
-### Virtual Environment
-To get started, first create a virtual environment and install the required packages:
 ```bash
+# Virtual Environment
 python -m venv bioxcpath
 source bioxcpath/bin/activate
 
-# PyTorch
+# PyTorch with cuda capabilities
 pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
 
-pip install -r requirements.txt
+pip install -r requirements.txt  
+
 ```
 
 ## Usage
