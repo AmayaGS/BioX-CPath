@@ -9,7 +9,7 @@ import timm as timm
 from timm.layers import to_2tuple
 
 from torchvision.models import resnet18, resnet50, ResNet18_Weights, ResNet50_Weights, vgg16_bn, VGG16_BN_Weights, convnext_base, ConvNeXt_Base_Weights
-from transformers import AutoModel
+#from transformers import AutoModel
 
 
 class VGG_embedding(nn.Module):

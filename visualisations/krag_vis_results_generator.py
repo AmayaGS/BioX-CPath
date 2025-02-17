@@ -1,18 +1,17 @@
 import os
 import pickle
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import to_networkx
-from models.KRAG_heatmap_model import KRAG_Classifier
-from .heatmap_generator import HeatmapGenerator
-from .graph_visualiser import GraphVisualiser
+import gc
+
+from mains.main_embedding import use_gpu
+from models.MUSTANG_heatmap_model import MUSTANG_Classifier_heatmap
 from .graph_metrics import GraphMetricGenerator
-from .metrics_visualiser import MetricsVisualiser
 from train_test_loops.krag_heatmap_loop import heatmap_scores
+
 
 class KRAGResultsGenerator:
     def __init__(self, args, results_dir, logger):
@@ -21,105 +20,171 @@ class KRAGResultsGenerator:
         self.logger = logger
         self.loss_fn = nn.CrossEntropyLoss()
 
-    def generate_data(self):
+    def process_fold(self, fold, patient_ids):
+        """
+        Process a single fold and generate metrics for visualization.
+
+        Args:
+            fold: Fold number
+            patient_ids: List of patient IDs to process
+
+        Returns:
+            dict: Dictionary of metrics data for all processed patients
+        """
         graph_dict = self._load_graph_dict()
-
-        if self.args.specific_ids and self.args.test_fold:
-            self.logger.info(f"Processing specific patients for {self.args.test_fold}")
-            self._process_fold(self.args.test_fold, self.args.specific_ids, graph_dict)
-        else:
-            self.logger.warning("No specific patient IDs or test fold provided. Processing all patients in all folds.")
-            splits = self._load_splits()
-            for fold, fold_data in enumerate(splits.items()):
-                self.logger.info(f"Processing fold: {fold}")
-                self._process_fold(fold, fold_data[1]['Test'], graph_dict)
-
-    def _process_fold(self, fold, patient_ids, graph_dict):
         graph_net = self._initialize_model(fold)
-        model_name = self.results_dir.split('/')[-1]
-        vis_path = os.path.join(self.args.directory, "vis_data", model_name)
-        output_dir = os.path.join(self.args.directory, "graph_visualisations", model_name)
-        os.makedirs(vis_path, exist_ok=True)
-        fold_dir = os.path.join(output_dir, f"Fold_{fold}")
-        os.makedirs(fold_dir, exist_ok=True)
 
-        all_graphs = {}
-        all_preds = {}
         all_metrics = {}
-        graph_visualiser = GraphVisualiser(self.args, self.results_dir, self.logger)
-        heatmap_generator = HeatmapGenerator(self.args, self.results_dir, self.logger)
-        metrics_generator = GraphMetricGenerator(self.args, self.results_dir, self.logger)
-        metrics_visualiser = MetricsVisualiser()
+        all_patient_data = {}
 
         for patient_id in patient_ids:
             if patient_id not in graph_dict:
                 self.logger.info(f"Warning: Patient ID {patient_id} not found in graph dictionary. Skipping.")
                 continue
 
-            data_path = os.path.join(vis_path, f"patient_data_{self.args.graph_mode}_fold_{fold}_{patient_id}_{self.args.dataset_name}.pkl")
+            try:
+                # Generate data path
+                data_path = os.path.join(
+                    self.args.directory,
+                    "vis_data",
+                    os.path.basename(self.results_dir),
+                    f"patient_data_{self.args.graph_mode}_fold_{fold}_{patient_id}_{self.args.dataset_name}"
+                )
 
-            if os.path.exists(data_path):
-                self.logger.info(f"Loading existing data for patient: {patient_id}")
-                with open(data_path, 'rb') as f:
-                    patient_data = pickle.load(f)
-            else:
-                self.logger.info(f"Calculating data for patient: {patient_id}")
-                patient_data = self._calculate_patient_data(self.args, patient_id, graph_dict, graph_net)
-                with open(data_path, 'wb') as f:
-                    pickle.dump(patient_data, f)
+                # Load or calculate patient data
+                patient_data = self._get_patient_data(data_path, patient_id, graph_dict, graph_net)
+                if patient_data is None:
+                    continue
 
-            patient_dir = os.path.join(fold_dir, f"{patient_id}")
-            os.makedirs(patient_dir, exist_ok=True)
-            # Visualize graphs
-            graph_visualiser.visualise_graphs(patient_id, patient_dir, patient_data, fold)
-            # Generate heatmaps
-            heatmap_generator.generate_heatmaps(patient_id, patient_dir, patient_data['attention_scores'], fold)
-            # Generate metrics
-            metrics_path = data_path[:-4] + '_metrics.pkl'
-            if os.path.exists(metrics_path):
-                self.logger.info(f"Loading existing metrics for patient: {patient_id}")
-                with open(metrics_path, 'rb') as f:
-                    metrics = pickle.load(f)
-            else:
-                self.logger.info(f"Calculating metrics for patient: {patient_id}")
-                metrics = metrics_generator.generate_metrics(patient_id, patient_dir, patient_data['graphs'],
-                                                         patient_data['actual_label'], fold)
-                with open(metrics_path, 'wb') as f:
-                    pickle.dump(metrics, f)
+                all_patient_data[patient_id] = patient_data
 
-            all_graphs[patient_id] = patient_data['graphs']
-            all_preds[patient_id] = [patient_data['actual_label'], patient_data['predicted_label']]
-            all_metrics[patient_id] = metrics
+                # Process metrics
+                metrics_path = f"{data_path}_graph_metrics.pkl"
+                metrics = self._get_patient_metrics(metrics_path, patient_id, patient_data)
+                if metrics is None:
+                    continue
 
-        self._save_pred_results(all_preds, fold)
-        metrics_visualiser.plot_metrics(all_metrics, fold_dir)
+                # Combine all patient data for visualization
+                all_metrics[patient_id] = [
+                    patient_data['actual_label'],
+                    patient_data['predicted_label'],
+                    patient_data['stain_attention'],
+                    patient_data['layer_attention'],
+                    patient_data['entropy_scores'],
+                    metrics
+                ]
 
-        # # global edge weight distribution
-        # if len(all_graphs) > 1:
-        #     graph_visualiser.plot_global_edge_weight_distribution(fold_dir, all_graphs, fold)
-        # else:
-        #     self.logger.info("Skipping global edge weight distribution plot as only one patient is processed.")
+            except Exception as e:
+                self.logger.error(f"Error processing patient {patient_id}: {e}")
+                continue
+
+        return all_metrics, all_patient_data
+
+    def _get_patient_data(self, data_path, patient_id, graph_dict, graph_net):
+        """Load or calculate patient data."""
+        if os.path.exists(f"{data_path}.pkl"):
+            self.logger.info(f"Loading existing data for patient: {patient_id}")
+            with open(f"{data_path}.pkl", 'rb') as f:
+                return pickle.load(f)
+
+        self.logger.info(f"Calculating data for patient: {patient_id}")
+        try:
+            torch.cuda.empty_cache()
+            gc.collect()
+            patient_data = self._calculate_patient_data(patient_id, graph_dict, graph_net)
+            with open(f"{data_path}.pkl", 'wb') as f:
+                pickle.dump(patient_data, f)
+            return patient_data
+        except Exception as e:
+            self.logger.error(f"Error calculating data for patient {patient_id}: {e}")
+            return None
+
+    def _get_patient_metrics(self, metrics_path, patient_id, patient_data):
+        """Load or calculate patient metrics."""
+        if os.path.exists(metrics_path):
+            self.logger.info(f"Loading existing metrics for patient: {patient_id}")
+            with open(metrics_path, 'rb') as f:
+                return pickle.load(f)
+
+        self.logger.info(f"Calculating metrics for patient: {patient_id}")
+        try:
+            metrics_generator = GraphMetricGenerator(self.args, self.results_dir, self.logger)
+            metrics = metrics_generator.generate_metrics(
+                patient_id, None, patient_data['graphs'],
+                patient_data['actual_label'], None
+            )
+            with open(metrics_path, 'wb') as f:
+                pickle.dump(metrics, f)
+            return metrics
+        except Exception as e:
+            self.logger.error(f"Error calculating metrics for patient {patient_id}: {e}")
+            return None
 
     def _calculate_patient_data(self, patient_id, graph_dict, graph_net):
         slide_embedding = graph_dict[patient_id]
         test_graph_loader = DataLoader(slide_embedding, batch_size=1, shuffle=False,
-                                       num_workers=self.args.num_workers)
+                                       num_workers=self.args.num_workers, pin_memory=False)
 
-        actual_label, predicted_label, metadata, attention_scores, layer_data = heatmap_scores(self.args,
-            graph_net, test_graph_loader, patient_id, self.loss_fn, n_classes=self.args.n_classes
-        )
+        actual_label, predicted_label, metadata, attention_scores, layer_data, layer_attention, stain_attention, entropy_scores = heatmap_scores(self.args,
+            graph_net, test_graph_loader, patient_id, self.loss_fn, n_classes=self.args.n_classes)
 
         patient_graphs = self._create_patient_graphs(layer_data, patient_id)
 
         return {
-            'actual_label': actual_label.item(),
+            'actual_label': actual_label.item(), # this might not work anymore
             'predicted_label': predicted_label.item(),
             'metadata': metadata,
             'attention_scores': attention_scores,
+            'layer_attention': layer_attention,
+            'stain_attention': stain_attention,
+            'entropy_scores': entropy_scores,
             'layer_data': layer_data,
             'graphs': patient_graphs
         }
 
+    # def analyze_patient_relationships(self, patient_data, patient_id, fold_dir):
+    #     """
+    #     Add this method to your existing class to analyze stain relationships
+    #     """
+    #     analyzer = StainRelationshipAnalyzer(self.args)
+    #
+    #     # Analyze relationships across all layers
+    #     layer_analyses = analyzer.analyze_layer_relationships(patient_data, patient_id)
+    #
+    #     # Create visualizations for each layer
+    #     for layer_idx, layer_stats in layer_analyses.items():
+    #         # Visualize attention weights
+    #         analyzer.visualize_layer_relationships(
+    #             layer_stats,
+    #             layer_idx,
+    #             'mean_weight',
+    #             output_path=f'{fold_dir}/{patient_id}/patient_{patient_id}_attention'
+    #         )
+    #
+    #         # Analyze edge types
+    #         edge_type_analysis = analyzer.analyze_edge_types(layer_stats)
+    #         analyzer.visualize_layer_relationships(
+    #             layer_stats,
+    #             layer_idx,
+    #             'spatial_ratio',
+    #             output_path=f'{fold_dir}/{patient_id}/patient_{patient_id}_spatial_ratio'
+    #         )
+    #
+    #     return layer_analyses
+
+    # def analyze_dataset_relationships(self, all_patient_data, fold_dir):
+    #     """
+    #     Analyze relationships across all patients
+    #
+    #     Args:
+    #         all_patient_data: List of patient data dictionaries
+    #         fold_dir: Directory path for the current fold
+    #     """
+    #     analyzer = StainRelationshipAnalyzer(self.args)
+    #     analyzer._create_label_heatmaps(all_patient_data, fold_dir)
+    #     dataset_stats, avg_correlations = analyzer.analyze_dataset_relationships(all_patient_data, fold_dir, "all"
+    #     return dataset_stats, avg_correlations
+    #
     def _create_patient_graphs(self, layer_data, patient_id):
         patient_graphs = []
         for layer in layer_data[patient_id]:
@@ -127,26 +192,27 @@ class KRAGResultsGenerator:
             patient_graphs.append(G)
         return patient_graphs
 
+
     def _create_networkx_graph(self, data):
         # Convert torch geometric data to networkx graph. THIS DOES NOT CONSERVE THE EDGE AND NODE INDEXES!!!
         G = to_networkx(data, to_undirected=False)
 
         node_scores = data.node_att_scores.cpu().detach().numpy()
-        node_scores = 100 + (node_scores - node_scores.min()) / (node_scores.max() - node_scores.min()) * 500
+        node_scores = 100 + (node_scores - node_scores.min()) / (node_scores.max() - node_scores.min() + 1e-9) # Normalizing node scores
         edge_weights = data.attention_weights.cpu().detach().numpy().mean(axis=1)
-        edge_weights = 1 + (edge_weights - edge_weights.min()) / (edge_weights.max() - edge_weights.min()) * 9
+        edge_weights = 1 + (edge_weights - edge_weights.min()) / (edge_weights.max() - edge_weights.min()) # Normalizing edge weights
 
         for j, node in enumerate(G.nodes()):
             original_index = data.node_mapping[j]
-            G.nodes[node]['stain_type'] = data.node_attr[original_index].item()
+            G.nodes[node]['stain_type'] = data.node_attr[original_index].item() # Mapping back to original node index to get the stain type
             G.nodes[node]['filename'] = data.node_filenames[j]
             G.nodes[node]['score'] = node_scores[j]
 
         for (u, v, edge_data) in G.edges(data=True):
-            original_u = data.node_mapping[u]
-            original_v = data.node_mapping[v]
+            original_u = data.node_mapping[u] # source node
+            original_v = data.node_mapping[v] # target node
             original_edge = str([original_u, original_v])
-            original_edge_index = data.edge_mapping[original_edge]
+            original_edge_index = data.edge_mapping[original_edge] # Mapping back to original edge index to get the edge type
             edge_type = data.original_edge_attr[original_edge_index].item()
             edge_data['edge_attribute'] = edge_type
             attention_idx = data.edge_idx_mapping[original_edge_index]
@@ -155,21 +221,18 @@ class KRAGResultsGenerator:
         return G
 
     def _initialize_model(self, fold):
-        graph_net = KRAG_Classifier(
-            self.args.embedding_vector_size,
-            hidden_dim=self.args.hidden_dim,
-            num_classes=self.args.n_classes,
-            heads=self.args.heads,
-            pooling_ratio=self.args.pooling_ratio,
-            walk_length=self.args.encoding_size,
-            conv_type=self.args.convolution,
-            attention=self.args.attention
-        )
+        graph_net = MUSTANG_Classifier_heatmap(in_features=self.args.embedding_vector_size, edge_attr_dim=len(self.args.edge_types),
+                           node_attr_dim=len(self.args.stain_types), hidden_dim=self.args.hidden_dim,
+                           num_classes=self.args.n_classes, heads=self.args.heads, pooling_ratio=self.args.pooling_ratio,
+                           walk_length=self.args.encoding_size, conv_type=self.args.convolution,
+                           num_layers=self.args.num_layers, embedding_dim=10, dropout_rate=self.args.dropout,
+                           use_node_embedding=self.args.use_node_embedding, use_edge_embedding=self.args.use_edge_embedding,
+                           use_attention=self.args.use_attention)
 
         checkpoints = os.path.join(self.results_dir, "checkpoints", "best_val_models")
         checkpoint = os.path.join(checkpoints, f"checkpoint_fold_{fold}_accuracy.pth")
-        checkpoint_weights = torch.load(checkpoint)
-        graph_net.load_state_dict(checkpoint_weights)
+        checkpoint_weights = torch.load(checkpoint, weights_only=True)
+        graph_net.load_state_dict(checkpoint_weights, strict=False)
         if torch.cuda.is_available():
             graph_net.cuda()
         graph_net.eval()

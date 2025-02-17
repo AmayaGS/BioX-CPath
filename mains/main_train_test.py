@@ -2,7 +2,6 @@
 
 # Misc
 import os
-import os.path
 import time
 import pandas as pd
 import pickle
@@ -19,7 +18,7 @@ from train_test_loops.krag_test_loop import test_loop, ensemble_test_results
 from utils.setup_utils import seed_everything
 from utils.profiling_utils import train_profiler, test_profiler
 from utils.model_utils import load_data, minority_sampler, prepare_data_loaders, initialise_model
-from utils.model_utils import summarise_train_results, summarise_test_results
+from utils.model_utils import summarise_train_results, summarise_val_results, summarise_test_results
 from utils.plotting_functions_utils import plot_roc_curve
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -76,7 +75,7 @@ def train_model(args, results_dir, logger):
         df_results.to_csv(results_dir + "/" + run_settings + "_fold_" + str(fold_idx) + ".csv", index=False)
 
     total_time = time.time() - epochs_time
-    summarise_train_results(all_results, mean_best_acc, mean_best_AUC, results_dir, run_settings)
+    summarise_train_results(mean_best_acc, mean_best_AUC, results_dir)
 
     logger.info("Full Training & validation completed in {:.0f}m {:.0f}s"
                 .format(total_time // 60, total_time % 60))
@@ -87,42 +86,74 @@ def train_model(args, results_dir, logger):
 def test_model(args, results_dir, logger):
     run_settings, checkpoints, data_dict, sss_folds = load_data(args, results_dir)
 
-    _, _, testing_folds = prepare_data_loaders(data_dict, sss_folds)
+    _, validation_folds, testing_folds = prepare_data_loaders(data_dict, sss_folds)
 
     all_results = []
     test_profiler.set_logger(logger)
     test_profiler.reset_gpu_memory()
 
-    for fold_idx, test_fold in enumerate(testing_folds):
-        model, loss, _, _ = initialise_model(args)
+    if args.val:
+        val_results_dir = os.path.join(results_dir, "val_results")
+        os.makedirs(val_results_dir, exist_ok=True)
+        for fold_idx, val_fold in enumerate(validation_folds):
+            model, loss, _, _ = initialise_model(args)
 
-        # load best model from training and validation
-        checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_accuracy.pth")
-        model.load_state_dict(checkpoint)
+            # load best model
+            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_loss.pth")
+            model.load_state_dict(checkpoint)
 
-        test_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False,
-                                       num_workers=args.num_workers, drop_last=False)
-        start_time = time.time()
-        test_results = test_loop(args,
-                                 model,
-                                 test_loader,
-                                 loss,
-                                 args.n_classes,
-                                 logger,
-                                 fold_idx)
-        inference_time = time.time() - start_time
-        test_profiler.update_inference_time(inference_time)
+            val_loader = DataLoader(val_fold, batch_size=args.batch_size, shuffle=False,
+                                           num_workers=args.num_workers, drop_last=False)
+            val_results = test_loop(args,
+                                     model,
+                                     val_loader,
+                                     loss,
+                                     args.n_classes,
+                                     logger,
+                                     fold_idx)
 
-        all_results.append(test_results)
-        plot_roc_curve(test_results, args.n_classes, fold_idx, results_dir)
+            all_results.append(val_results)
+            plot_roc_curve(val_results, args.n_classes, fold_idx, val_results_dir)
 
-        with open(f"{results_dir}/results_fold_{fold_idx}.pkl", 'wb') as f:
-            pickle.dump(test_results, f)
+            with open(f"{val_results_dir}/results_fold_{fold_idx}.pkl", 'wb') as f:
+                pickle.dump(val_results, f)
 
-    summarise_test_results(all_results, results_dir, logger, args)
+        summarise_val_results(all_results, val_results_dir, logger, args)
 
-    logger.info("Inference Profiling Results:")
-    test_profiler.report(is_training=False)
+    if args.test:
+        for fold_idx, test_fold in enumerate(testing_folds):
+            model, loss, _, _ = initialise_model(args)
 
-    ensemble_test_results(args, results_dir, all_results, logger)
+            # load best model from training and validation
+            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_loss.pth", weights_only=True)
+            model.load_state_dict(checkpoint, strict=True)
+
+            test_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False,
+                                           num_workers=args.num_workers, drop_last=False)
+            start_time = time.time()
+            test_results = test_loop(args,
+                                     model,
+                                     test_loader,
+                                     loss,
+                                     args.n_classes,
+                                     logger,
+                                     fold_idx)
+            inference_time = time.time() - start_time
+            test_profiler.update_inference_time(inference_time)
+
+            all_results.append(test_results)
+            plot_roc_curve(test_results, args.n_classes, fold_idx, results_dir)
+
+            with open(f"{results_dir}/results_fold_{fold_idx}.pkl", 'wb') as f:
+                pickle.dump(test_results, f)
+
+        #summarise_test_results(all_results, results_dir, logger, args)
+        summarise_val_results(all_results, results_dir, logger, args)
+        ensemble_test_results(args, results_dir, all_results, logger)
+
+        logger.info("Inference Profiling Results:")
+        test_profiler.report(is_training=False)
+
+
+
 

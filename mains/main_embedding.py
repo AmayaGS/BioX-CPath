@@ -20,7 +20,7 @@ from utils.dataloaders_utils import Loaders
 from models.embedding_models import VGG_embedding, resnet18_embedding, resnet50_embedding, convNext
 from models.embedding_models import contrastive_resnet18
 from models.embedding_models import GigaPath_embedding, UNI_embedding, BiOptimus_embedding, Phikon_embedding
-from utils.embedding_utils import seed_everything, collate_fn_none, create_embedding_graphs, save_graph_statistics
+from utils.embedding_utils import collate_fn_none, create_embedding_graphs, save_graph_statistics
 
 # Set environment variables
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -32,9 +32,6 @@ if use_gpu:
 
 
 def patch_embedding(args, logger):
-
-    # Set seed
-    seed_everything(args.seed)
 
     # ImageNet transforms - good for UNI, GigaPath, Phikon
     transform = transforms.Compose(

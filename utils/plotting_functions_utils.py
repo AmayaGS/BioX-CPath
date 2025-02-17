@@ -42,45 +42,6 @@ def plot_training_results(results_dict, fold, save_path):
     plt.close()
 
 
-def plot_averaged_results(all_results, save_path):
-    num_epochs = len(all_results[0]['train_loss'])
-    epochs = range(1, num_epochs + 1)
-
-    metrics = ['loss', 'accuracy', 'AUC']
-    types = ['train', 'val']
-
-    plt.figure(figsize=(15, 5))
-
-    for i, metric in enumerate(metrics, 1):
-        plt.subplot(1, 3, i)
-        for t in types:
-            if metric == 'AUC' and t == 'train':
-                continue  # Skip if we don't have training AUC
-            means = np.mean([results[f'{t}_{metric.lower()}'] for results in all_results], axis=0)
-            stds = np.std([results[f'{t}_{metric.lower()}'] for results in all_results], axis=0)
-
-            if t == 'train':
-                line_style = '-'
-                color = 'red'
-            else:  # val
-                line_style = '-.'
-                color = 'blue'
-
-            label = f'{t.capitalize()} {metric if metric == "AUC" else metric.capitalize()}'
-            plt.plot(epochs, means, line_style, color=color, label=label)
-            plt.fill_between(epochs, means - stds, means + stds, color=color, alpha=0.2)
-
-        plt.title(f'Average {metric if metric == "AUC" else metric.capitalize()} Across Folds')
-        plt.ylabel(metric if metric == "AUC" else metric.capitalize())
-        plt.xlabel('Epochs')
-        plt.legend(loc='best')
-
-    plt.tight_layout()
-    plt.savefig(f'{save_path}/average_training_results.png')
-    plt.close()
-
-
-
 def plot_roc_curve(results_dict, n_classes, fold, save_path):
     plt.figure(figsize=(10, 8))
 

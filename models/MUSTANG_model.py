@@ -66,11 +66,6 @@ class MUSTANG_Classifier(nn.Module):
         self.dropout = nn.Dropout(dropout_rate)
         self.classifier1 = nn.Linear(concat_dim, concat_dim // 2)
         self.classifier2 = nn.Linear(concat_dim // 2, num_classes)
-        #self.classifier3 = nn.Linear(concat_dim // 4, num_classes)
-
-        # self.lin1 = torch.nn.Linear(hidden_dim * 2, hidden_dim)
-        # self.lin2 = torch.nn.Linear(hidden_dim, hidden_dim // 2)
-        # self.lin3 = torch.nn.Linear(hidden_dim // 2, num_classes)
 
     def forward(self, data, label):
         x = self.mustang(data)  # x shape: (1, num_layers * hidden_dim * 2)
@@ -90,105 +85,6 @@ class MUSTANG_Classifier(nn.Module):
         Y_prob = F.softmax(logits, dim=-1)
 
         return logits, Y_prob, layer_attention, label
-
-        # x = self.krag(data)
-        #
-        # x = self.lin1(x)
-        # x = F.relu(x)
-        # x = F.dropout(x, p=0.2, training=self.training)
-        # x = self.lin2(x)
-        # x = F.relu(x)
-        # logits = self.lin3(x)
-        # Y_prob = F.softmax(logits, dim=1)
-        #
-        # return logits, Y_prob, label
-
-class mustang_pooling_v1(torch.nn.Module):
-    def __init__(self, in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio, walk_length,
-                 conv_type, num_layers, embedding_dim):
-        super().__init__()
-        self.num_layers = num_layers
-        self.heads = heads
-        self.pooling_ratio = pooling_ratio
-        self.walk_length = walk_length
-
-        self.edge_embedding = nn.Embedding(edge_attr_dim, embedding_dim)
-        self.node_embedding = nn.Embedding(node_attr_dim, embedding_dim)
-
-        self.convolutions = nn.ModuleList()
-        self.pooling_layers = nn.ModuleList()
-
-        for i in range(num_layers):
-            in_dim = in_features + walk_length + embedding_dim if i == 0 else hidden_dim + walk_length + embedding_dim
-            conv = self._create_conv_layer(conv_type, in_dim, embedding_dim, hidden_dim, heads)
-            pool = SAGPooling(hidden_dim, self.pooling_ratio)
-            self.convolutions.append(conv)
-            self.pooling_layers.append(pool)
-
-    def forward(self, data):
-        x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
-
-        edge_attr_embedded = self.edge_embedding(edge_attr).squeeze()
-        node_attr_embedded = self.node_embedding(data.node_attr.unsqueeze(1)).squeeze()
-
-        if self.walk_length > 0:
-            random_walk_pe = data.random_walk_pe
-
-        layer_embeddings = []
-        for i in range(self.num_layers):
-            if self.walk_length > 0:
-                x = torch.cat([x, random_walk_pe, node_attr_embedded], dim=1)
-            else:
-                x = torch.cat([x, node_attr_embedded], dim=1)
-
-            x = F.relu(self.convolutions[i](x, edge_index, edge_attr_embedded))
-            x, edge_index, edge_attr_embedded, batch, perm, attention_scores = self.pooling_layers[i](x, edge_index, edge_attr_embedded, batch)
-            #layer_embeddings.append(torch.cat([gmp(x, batch), gmaxp(x, batch)], dim=1))
-
-            stain_scores = defaultdict(list)
-            for node, score in enumerate(attention_scores):
-                stain = data.node_attr[perm][node].item()
-                stain_scores[stain].append(score)
-
-            # Normalize scores for each stain
-            normalized_stain_scores = {stain: torch.tensor(scores).mean() for stain, scores in stain_scores.items()}
-            total_score = sum(normalized_stain_scores.values())
-            normalized_stain_scores = {stain: score / total_score for stain, score in normalized_stain_scores.items()}
-
-            avg_pooled_features = []
-            max_pooled_features = []
-            for stain, weight in normalized_stain_scores.items():
-                stain_mask = (data.node_attr[perm] == stain)
-                stain_features = x[stain_mask]
-                avg_pooled_stain_features = stain_features.mean(dim=0) * weight
-                max_pooled_stain_features = stain_features.max(dim=0).values * weight
-                avg_pooled_features.append(avg_pooled_stain_features)
-                max_pooled_features.append(max_pooled_stain_features)
-
-            mean_stain_pooled = torch.stack(avg_pooled_features).sum(dim=0)
-            max_stained_pool = torch.stack(max_pooled_features).sum(dim=0)
-            layer_embeddings.append(torch.cat([mean_stain_pooled, max_stained_pool]))
-
-            if self.walk_length > 0:
-                random_walk_pe = random_walk_pe[perm]
-            node_attr_embedded = node_attr_embedded[perm]
-
-        #x = torch.stack(layer_embeddings).sum(dim=0).unsqueeze(0)
-        x = torch.cat(layer_embeddings, dim=0).unsqueeze(0)
-
-        return x
-
-    def _create_conv_layer(self, conv_type, in_dim, edge_dim, out_dim, heads):
-        if conv_type == "GAT":
-            return GATv2Conv(in_dim, out_dim, heads=heads, concat=False, edge_dim=edge_dim)
-        elif conv_type == "GCN":
-            return GCNConv(in_dim, out_dim, add_self_loops=False)
-        elif conv_type == "GraphSAGE":
-            return SAGEConv(in_dim, out_dim)
-        elif conv_type == "GIN":
-            return GINConv(nn.Sequential(nn.Linear(in_dim, out_dim)), edge_dim=edge_dim)
-        else:
-            raise ValueError(f"Unknown conv_type: {conv_type}")
 
 
 class mustang_pooling(torch.nn.Module):
@@ -262,7 +158,7 @@ class mustang_pooling(torch.nn.Module):
             elif self.use_node_embedding:
                 x = torch.cat([x, node_attr_embedded], dim=1)
 
-            if self.conv_type in ["GAT", "GIN"] and self.use_edge_embedding:
+            if self.conv_type in ["GAT"] and self.use_edge_embedding:
                 x = F.relu(self.convolutions[i](x, edge_index, edge_attr=edge_attr_embedded))
             else:
                 x = F.relu(self.convolutions[i](x, edge_index))

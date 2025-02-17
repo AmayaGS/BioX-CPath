@@ -1,14 +1,10 @@
 # Misc
 import os
 import logging
-from datetime import datetime
 import argparse
 import ast
-
 import random
 import numpy as np
-
-from PIL import Image
 
 # PyTorch
 import torch
@@ -29,12 +25,10 @@ from models.CLAM_model import GatedAttention as CLAM
 
 MODEL_CONFIGS = {
     'KRAG': {
-        'graph_mode': 'krag',
         'model_class': KRAG_Classifier,
         'use_args': True
     },
     'MUSTANG': {
-        'graph_mode': 'krag',
         'model_class': MUSTANG_Classifier,
         'use_args': True
     },
@@ -113,32 +107,44 @@ def get_model_config(args):
 def setup_results_and_logging(args, log_type):
     current_directory = args.directory
     config = get_model_config(args)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     run_results_folder = (
-        f"{args.model_name}_{config['graph_mode']}_{config['convolution']}_PE_{config['encoding_size']}"
+        rf"{args.model_name}_{config['graph_mode']}_{config['convolution']}_PE_{config['encoding_size']}"
         f"_{args.embedding_net}_{args.dataset_name}_{args.seed}_{config['heads']}_{config['pooling_ratio']}"
-        f"_{args.learning_rate}_{args.scheduler}_{args.stain_type}_NE_{args.use_node_embedding}_EE_{args.use_edge_embedding}_SAL_{config['use_attention']}_2dr_{config['dropout']}_2LL")
+        f"_{args.learning_rate}_{args.stain_type}_SAL_{config['use_attention']}_2dr_{config['dropout']}_2LL")
 
     results_dir = os.path.join(current_directory, "results", run_results_folder)
     os.makedirs(results_dir, exist_ok=True)
 
-    # Set up logging
-    log_file_path = os.path.join(results_dir, run_results_folder + log_type + ".log")
+    log_file_path = results_dir + "/" + f"{run_results_folder}_{log_type}.log"
 
-    # Configure logging
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M',
-                        handlers=[
-                            logging.FileHandler(log_file_path),
-                            logging.StreamHandler()
-                        ])
+    # Create a new logger with a unique name
+    logger = logging.getLogger(f'MUSTANG_{run_results_folder}_{log_type}')
 
-    logger = logging.getLogger('KRAG')
+    # Reset handlers to avoid duplicate logging
+    if logger.handlers:
+        logger.handlers.clear()
+
+    # Set the logging level
+    logger.setLevel(logging.INFO)
+
+    # Create formatters and handlers
+    formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M')
+
+    # File handler
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Stream handler
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    # Prevent propagation to root logger to avoid duplicate logs
+    logger.propagate = False
 
     return results_dir, logger
-
 
 def parse_dict(string):
     try:

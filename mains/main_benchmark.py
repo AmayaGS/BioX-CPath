@@ -84,7 +84,7 @@ def train_model(args, results_dir, logger):
         df_results = pd.DataFrame.from_dict(results_dict)
         df_results.to_csv(results_dir + "/" + run_settings + "_fold_" + str(fold_idx) + ".csv", index=False)
 
-    summarise_train_results(all_results, mean_best_acc, mean_best_AUC, results_dir, run_settings)
+    summarise_train_results(mean_best_acc, mean_best_AUC, results_dir)
 
     logger.info("Full Training & validation completed in {:.0f}m {:.0f}s"
                 .format(total_time // 60, total_time % 60))

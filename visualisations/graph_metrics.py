@@ -23,7 +23,7 @@ class GraphMetricGenerator:
         for layer, (G) in enumerate(graphs, 1):
             properties = self.calculate_graph_properties(G, patient_id, label, layer, patient_dir, fold)
             layers[f"Layer_{layer}"] = properties
-            self._visualise_top_k_nodes(patient_id, patient_dir, label, layer, properties)
+            # self._visualise_top_k_nodes(patient_id, patient_dir, label, layer, properties)
         metrics[patient_id].append(layers)
 
         return metrics
@@ -35,22 +35,22 @@ class GraphMetricGenerator:
         properties['avg_degree'].append(np.mean([d for n, d in G.degree()]))
 
         # Node centrality measures
-        degree_centrality = nx.degree_centrality(G)
-        closeness_centrality = nx.closeness_centrality(G)
-        betweenness_centrality = nx.betweenness_centrality(G)
-        eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=10000)
+        # degree_centrality = nx.degree_centrality(G)
+        # closeness_centrality = nx.closeness_centrality(G)
+        # betweenness_centrality = nx.betweenness_centrality(G)
+        # eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=10000)
         node_attention_score = nx.get_node_attributes(G,'score')
 
-        properties['degree_centrality'].append(degree_centrality)
-        properties['closeness_centrality'].append(closeness_centrality)
-        properties['betweenness_centrality'].append(betweenness_centrality)
-        properties['eigenvector_centrality'].append(eigenvector_centrality)
+        # properties['degree_centrality'].append(degree_centrality)
+        # properties['closeness_centrality'].append(closeness_centrality)
+        # properties['betweenness_centrality'].append(betweenness_centrality)
+        # properties['eigenvector_centrality'].append(eigenvector_centrality)
         properties['node_attention_score'].append(node_attention_score)
 
-        # Edge importance
-        edge_betweenness = nx.edge_betweenness_centrality(G)
-
-        properties['edge_betweenness'].append(edge_betweenness)
+        # # Edge importance
+        # edge_betweenness = nx.edge_betweenness_centrality(G)
+        #
+        # properties['edge_betweenness'].append(edge_betweenness)
 
         # Calculate importance scores for each stain type and edge type in the graph
         stain_importance, edge_type_importance = self._calculate_importance_scores(G)
@@ -58,37 +58,37 @@ class GraphMetricGenerator:
         properties['stain_importance'] = stain_importance
         properties['edge_type_importance'] = edge_type_importance
 
-        stain_properties = self._aggregate_node_properties(G, degree_centrality, closeness_centrality,
-                                   betweenness_centrality, eigenvector_centrality)
+        # stain_properties = self._aggregate_node_properties(G, degree_centrality, closeness_centrality,
+        #                            betweenness_centrality, eigenvector_centrality)
+        #
+        # properties['stain_properties'] = stain_properties
 
-        properties['stain_properties'] = stain_properties
-
-        # Calculate average properties for each stain type
-        for stain_type, measures in stain_properties.items():
-            for measure, values in measures.items():
-                properties[f'{stain_type}_{measure}_avg'].append(np.mean(values))
-                properties[f'{stain_type}_{measure}_max'].append(np.max(values))
-
-        measures = ['degree_centrality', 'closeness_centrality', 'betweenness_centrality',
-                    'eigenvector_centrality', 'node_attention_score']
-        # Top 5 most central nodes for each measure
-        for measure in measures:
-            centrality_dict = properties[measure][0]
-            top_nodes = sorted(centrality_dict, key=centrality_dict.get, reverse=True)[:5]
-            properties[f'top_5_{measure}'].append([
-                {   'node': node,
-                    'filename': G.nodes[node]['filename'],
-                    'stain_type': self.stain_types_rev[G.nodes[node]['stain_type']],
-                    'score': centrality_dict[node]
-                }
-                for node in top_nodes
-            ])
-
-        # Top 5 most important edges
-        top_edges = sorted(edge_betweenness, key=edge_betweenness.get, reverse=True)[:5]
-        properties['top_5_edge_betweenness'].append(
-            [(edge, G.edges[edge]['edge_attribute'], edge_betweenness[edge]) for edge in top_edges]
-        )
+        # # Calculate average properties for each stain type
+        # for stain_type, measures in stain_properties.items():
+        #     for measure, values in measures.items():
+        #         properties[f'{stain_type}_{measure}_avg'].append(np.mean(values))
+        #         properties[f'{stain_type}_{measure}_max'].append(np.max(values))
+        #
+        # measures = ['degree_centrality', 'closeness_centrality', 'betweenness_centrality',
+        #             'eigenvector_centrality', 'node_attention_score']
+        # # Top 5 most central nodes for each measure
+        # for measure in measures:
+        #     centrality_dict = properties[measure][0]
+        #     top_nodes = sorted(centrality_dict, key=centrality_dict.get, reverse=True)[:5]
+        #     properties[f'top_5_{measure}'].append([
+        #         {   'node': node,
+        #             'filename': G.nodes[node]['filename'],
+        #             'stain_type': self.stain_types_rev[G.nodes[node]['stain_type']],
+        #             'score': centrality_dict[node]
+        #         }
+        #         for node in top_nodes
+        #     ])
+        #
+        # # Top 5 most important edges
+        # top_edges = sorted(edge_betweenness, key=edge_betweenness.get, reverse=True)[:5]
+        # properties['top_5_edge_betweenness'].append(
+        #     [(edge, G.edges[edge]['edge_attribute'], edge_betweenness[edge]) for edge in top_edges]
+        # )
 
         return properties
 
@@ -128,8 +128,7 @@ class GraphMetricGenerator:
 
 
     def _visualise_top_k_nodes(self, patient_id, patient_dir, label, layer, properties):
-        measures = ['degree_centrality', 'closeness_centrality', 'betweenness_centrality',
-                    'eigenvector_centrality', 'node_attention_score']
+        measures = ['node_attention_score']
 
         fig = plt.figure(figsize=(20, 22))
         gs = gridspec.GridSpec(6, len(measures), height_ratios=[0.25, 1, 1, 1, 1, 1])

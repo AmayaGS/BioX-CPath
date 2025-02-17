@@ -1,244 +1,1300 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import seaborn as sns
 
 
 class MetricsVisualiser:
-    def __init(self, args):
-        self.args = args
+    def __init__(self):
+        self.setup_plot_style()
 
-    def plot_metrics(self, all_metrics, fold_dir):
-        self.plot_stain_importance(all_metrics, fold_dir)
-        self.plot_edge_type_importance(all_metrics, fold_dir)
-        self.plot_overall_stain_importance(all_metrics, fold_dir)
-        self.plot_stain_importance_by_label(all_metrics, fold_dir)
-        self.plot_edge_importance(all_metrics, fold_dir)
-        self.plot_stain_edge_correlation(all_metrics, fold_dir)
-        self.plot_importance_trends(all_metrics, fold_dir)
+    def setup_plot_style(self):
+        """Set up consistent plotting style across all visualizations."""
+        plt.style.use('default')
+        # Set seaborn style base
+        sns.set_style("whitegrid")
 
+        # Custom parameters
+        plt.rcParams.update({
+            # Figure and axes backgrounds
+            'figure.facecolor': 'white',
+            'axes.facecolor': 'white',
+            # Grid styling
+            'grid.color': '#E5E5E5',
+            'grid.linestyle': '-',
+            'grid.alpha': 0.5,
+            'axes.grid': True,
+            'axes.grid.which': 'major',
+            'axes.grid.axis': 'y',  # Only horizontal gridlines
+            # Spine styling
+            'axes.spines.top': False,
+            'axes.spines.right': False,
+            'axes.spines.left': True,
+            'axes.spines.bottom': True,
+            'axes.edgecolor': '#666666',
+            # Tick styling
+            'xtick.color': '#666666',
+            'ytick.color': '#666666',
+            'xtick.direction': 'out',
+            'ytick.direction': 'out',
+        })
 
-    def plot_stain_importance(self, all_metrics, fold_dir):
-        fig, axs = plt.subplots(len(all_metrics), 1, figsize=(10, 5 * len(all_metrics)))
-        fig.suptitle('Stain Importance Across Layers')
+    def plot_metrics(self, args, all_metrics, fold_dir):
+        """Main function to generate all visualizations."""
+        # Patient-specific visualizations
+        self.generate_patient_reports(args, all_metrics, fold_dir)
+        self.plot_patient_specific_metrics(args, all_metrics, fold_dir)
 
-        for i, (patient_id, patient_data) in enumerate(all_metrics.items()):
-            layers = patient_data[patient_id][1]
-            stain_data = {stain: [] for stain in layers['Layer_1']['stain_importance'].keys()}
+        # Aggregate visualizations
+        self.plot_aggregate_metrics(args, all_metrics, fold_dir)
 
-            for layer in layers.values():
-                for stain, importance in layer['stain_importance'].items():
-                    stain_data[stain].append(importance)
+    #  Patient-specific visualizations
+    ## -----------------------------------------------------------------------------------------------------------------
 
-            for stain, importances in stain_data.items():
-                axs[i].plot(range(1, len(importances) + 1), importances, label=stain, marker='o')
-
-            axs[i].set_title(f'Patient {patient_id}')
-            axs[i].set_xlabel('Layer')
-            axs[i].set_ylabel('Stain Importance')
-            axs[i].legend()
-
-        plt.tight_layout()
-        plt.savefig(f"{fold_dir}/stain_importance_across_layers_{fold_dir[-6:]}.png", dpi=300,
-                    bbox_inches='tight')
-        plt.close()
-
-    def plot_edge_type_importance(self, all_metrics, fold_dir):
-        fig, axs = plt.subplots(len(all_metrics), 1, figsize=(10, 5 * len(all_metrics)))
-        fig.suptitle('Edge Type Importance Across Layers')
-
-        for i, (patient_id, patient_data) in enumerate(all_metrics.items()):
-            layers = patient_data[patient_id][1]
-            edge_types = list(layers['Layer_1']['edge_type_importance'].keys())
-
-            data = {edge_type: [] for edge_type in edge_types}
-            for layer in layers.values():
-                for edge_type, importance in layer['edge_type_importance'].items():
-                    data[edge_type].append(importance)
-
-            bottom = np.zeros(len(layers))
-            for edge_type in edge_types:
-                axs[i].bar(range(1, len(layers) + 1), data[edge_type], bottom=bottom, label=edge_type)
-                bottom += data[edge_type]
-
-            axs[i].set_title(f'Patient {patient_id}')
-            axs[i].set_xlabel('Layer')
-            axs[i].set_ylabel('Edge Type Importance')
-            axs[i].legend()
-
-        plt.tight_layout()
-        plt.savefig(f"{fold_dir}/edge_importance_across_layers.png", dpi=300,
-                    bbox_inches='tight')
-        plt.close()
-
-    def plot_overall_stain_importance(self, all_metrics, fold_dir):
-        stain_data = {}
+    def generate_patient_reports(self, args, all_metrics, fold_dir):
+        """Generate detailed text reports for each patient."""
+        stain_names = {v: k for k, v in args.stain_types.items()}
+        label_names = args.label_dict
 
         for patient_id, patient_data in all_metrics.items():
-            layers = patient_data[patient_id][1]
-            for layer in layers.values():
-                for stain, importance in layer['stain_importance'].items():
-                    if stain not in stain_data:
-                        stain_data[stain] = []
-                    stain_data[stain].append(importance)
+            label = patient_data[0]
+            predicted = patient_data[1]
+            stain_attentions = patient_data[2]
+            layer_attentions = patient_data[3]
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+            report = []
+            report.append(f"Patient Report: {patient_id}")
+            report.append("=" * 50)
+            report.append(f"\nGround Truth: {label_names[str(label)]}")
+            report.append(f"Predicted Label: {label_names[str(predicted)]}")
+            report.append("-" * 50)
 
-        box_data = [stain_data[stain] for stain in stain_data]
-        ax.boxplot(box_data, labels=list(stain_data.keys()))
+            # Add stain importance per layer
+            report.append("\nStain Importance by Layer:")
+            report.append("-" * 25)
 
-        ax.set_title('Overall Stain Importance Across All Patients and Layers')
-        ax.set_ylabel('Importance')
-        ax.set_xlabel('Stain Type')
+            # Create header
+            header = ["Layer"] + [stain_names[s] for s in sorted(stain_names.keys())]
+            report.append("\t".join(header))
 
-        plt.savefig(f"{fold_dir}/stain_importance_overall.png", dpi=300,
-                    bbox_inches='tight')
+            # Add values
+            for layer_idx, stain_dict in enumerate(stain_attentions):
+                values = [f"Layer {layer_idx + 1}"]
+                for stain_num in sorted(stain_names.keys()):
+                    value = stain_dict.get(stain_num, 0.0)
+                    values.append(f"{float(value):.3f}")
+                report.append("\t".join(values))
+
+            # Add layer attention values
+            report.append("\nLayer Attention Values:")
+            report.append("-" * 25)
+            for layer_idx, attention in enumerate(layer_attentions):
+                report.append(f"Layer {layer_idx + 1}: {float(attention):.3f}")
+
+            # Save report
+            report_path = os.path.join(fold_dir, str(patient_id))
+            os.makedirs(report_path, exist_ok=True)
+            with open(os.path.join(report_path, f"{patient_id}_report.txt"), 'w') as f:
+                f.write("\n".join(report))
+
+    def plot_patient_layer_attention(self, args, patient_id, patient_data, output_dir):
+        """Generate layer attention plot for a single patient."""
+        label = patient_data[0]
+        layer_attentions = patient_data[3]
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Plot setup with consistent color scheme
+        colors = plt.cm.Reds(np.linspace(0.3, 0.9, len(layer_attentions)))
+        layers = [f'Layer {i + 1}' for i in range(len(layer_attentions))]
+        values = [float(x) for x in layer_attentions]
+
+        # Create bars
+        bars = ax.bar(range(len(values)), values,
+                      width=0.3, color=colors,
+                      edgecolor='black', linewidth=1)
+
+        # Customize plot
+        ax.set_title(f'Patient {patient_id} - {args.label_dict[str(label)]}',
+                     fontsize=11, fontweight='bold', y=0.95)
+        ax.set_ylabel('Layer Attention Score', fontsize=10)
+        ax.set_ylim(0, 1.15)  # Dynamic y-limit
+
+        # Add value labels
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, height,
+                    f'{height:.3f}', ha='center', va='bottom')
+
+        # Finalize and save
+        ax.set_xticks(range(len(layers)))
+        ax.set_xticklabels(layers)
+        ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, "layer_attention.png"),
+                    dpi=300, bbox_inches='tight')
         plt.close()
 
-    def plot_stain_importance_by_label(self, all_metrics, fold_dir):
+    def plot_patient_stain_attention(self, args, patient_id, patient_data, output_dir):
+        """Generate stain attention visualization for each layer of a patient."""
+        label = patient_data[0]
+        stain_attentions = patient_data[2]
+
+        # Create figure with shared y-axis label
+        fig = plt.figure(figsize=(8, 12))
+        gs = fig.add_gridspec(len(stain_attentions), 1, hspace=0.2)
+        axs = [fig.add_subplot(gs[i]) for i in range(len(stain_attentions))]
+
+        # Add common y-axis label
+        fig.text(-0.02, 0.5, 'Stain Attention Score', va='center', rotation='vertical', fontsize=12)
+
+        # Title
+        fig.suptitle(f'Patient {patient_id} - {args.label_dict[str(label)]}',
+                     fontsize=14, fontweight='bold', y=0.95)
+
+        # Get stain information
+        stain_names = {v: k for k, v in args.stain_types.items()}
+        stain_order = sorted([k for k, v in stain_names.items() if v != 'NA'])
+
+        # Plot each layer
+        for layer_idx, stain_dict in enumerate(stain_attentions):
+            ax = axs[layer_idx]
+
+            # Prepare data
+            values = [0.0] * len(stain_order)
+            colors = [args.stain_colors[stain_names[s]] for s in stain_order]
+
+            # Fill in actual values
+            for stain_num, value in stain_dict.items():
+                if stain_names[stain_num] != 'NA':
+                    idx = stain_order.index(stain_num)
+                    values[idx] = float(value)
+
+            # Create bars
+            x_positions = range(len(stain_order))
+            bars = ax.bar(x_positions, values, width=0.3,
+                          color=colors, alpha=0.7,
+                          edgecolor='black', linewidth=1)
+
+            # Customize plot
+            ax.text(-0.1, 0.5, f'Layer {layer_idx + 1}',
+                    transform=ax.transAxes, fontsize=11,
+                    rotation='vertical', verticalalignment='center')
+            ax.set_ylim(0, 1.15)
+
+            # Add value labels
+            for bar in bars:
+                height = bar.get_height()
+                if height > 0:
+                    ax.text(bar.get_x() + bar.get_width() / 2., height,
+                            f'{height:.3f}',
+                            ha='center', va='bottom', fontsize=11)
+
+            # Configure axes
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels([stain_names[s] for s in stain_order])
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+
+        plt.savefig(os.path.join(output_dir, "stain_attention.png"),
+                    dpi=300, bbox_inches='tight')
+        plt.close()
+
+    # def plot_patient_entropy_scores(self, args, patient_id, patient_data, output_dir):
+    #     """Generate entropy score visualization for a patient."""
+    #     label = patient_data[0]
+    #     entropy_scores = patient_data[4]
+    #
+    #     # Create figure
+    #     fig = plt.figure(figsize=(15, 5 * args.num_layers))
+    #     gs = fig.add_gridspec(len(entropy_scores), 1, hspace=0.4)
+    #     axs = [fig.add_subplot(gs[i]) for i in range(len(entropy_scores))]
+    #
+    #     # Add common y-axis label
+    #     fig.text(0.04, 0.5, 'Entropy Score', va='center', rotation='vertical', fontsize=12)
+    #
+    #     # Title
+    #     fig.suptitle(f'Entropy Scores\nPatient {patient_id} - {args.label_dict[str(label)]}',
+    #                  fontsize=14, fontweight='bold', y=0.95)
+    #
+    #     # Get stain information
+    #     stain_names = {v: k for k, v in args.stain_types.items()}
+    #     stain_order = ['global'] + sorted([k for k, v in stain_names.items() if v != 'NA'])
+    #     colors = ['#888888'] + [args.stain_colors[stain_names[s]] for s in stain_order[1:]]
+    #
+    #     # Find global max for consistent scaling
+    #     max_value = max(max(score.get('global', [0])[0] if isinstance(score.get('global', [0]), list)
+    #                         else score.get('global', [0]) for score in entropy_scores),
+    #                     max(max(score.get(stain, [0])[0] if isinstance(score.get(stain, [0]), list)
+    #                             else score.get(stain, [0]) for stain in stain_order[1:])
+    #                         for score in entropy_scores if any(s in score for s in stain_order[1:])))
+    #
+    #     # Plot each layer
+    #     for layer_idx, layer_dict in enumerate(entropy_scores):
+    #         ax = axs[layer_idx]
+    #
+    #         # Prepare data
+    #         values = []
+    #         # Get global score
+    #         global_scores = layer_dict.get('global', [0.0])
+    #         values.append(np.mean(global_scores) if isinstance(global_scores, list) else global_scores)
+    #
+    #         # Get stain scores
+    #         for stain in stain_order[1:]:
+    #             stain_scores = layer_dict.get(stain, [0.0])
+    #             values.append(np.mean(stain_scores) if isinstance(stain_scores, list) else stain_scores)
+    #
+    #         # Create bars
+    #         bars = ax.bar(range(len(values)), values, width=0.6,
+    #                       color=colors, alpha=0.7,
+    #                       edgecolor='black', linewidth=1)
+    #
+    #         # Customize plot
+    #         ax.text(-0.2, 0.5, f'Layer {layer_idx + 1}',
+    #                 transform=ax.transAxes, fontsize=11,
+    #                 verticalalignment='center')
+    #         ax.set_ylim(0, max_value * 1.15)
+    #
+    #         # Add value labels
+    #         for bar in bars:
+    #             height = bar.get_height()
+    #             if height > 0:
+    #                 ax.text(bar.get_x() + bar.get_width() / 2., height,
+    #                         f'{height:.3f}',
+    #                         ha='center', va='bottom', fontsize=10)
+    #
+    #         # Configure axes
+    #         labels = ['Global'] + [stain_names[s] for s in stain_order[1:]]
+    #         ax.set_xticks(range(len(labels)))
+    #         ax.set_xticklabels(labels)
+    #         ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+    #
+    #     plt.savefig(os.path.join(output_dir, "entropy_scores.png"),
+    #                 dpi=300, bbox_inches='tight')
+    #     plt.close()
+
+    def plot_patient_edge_importance(self, args, patient_id, patient_data, output_dir):
+        """Generate edge importance visualization for a patient."""
+        label = patient_data[0]
+        graph_metrics = patient_data[5][patient_id][1]
+
+        # Create figure
+        fig = plt.figure(figsize=(15, 6))
+        ax = fig.add_subplot(111)
+
+        # Get edge types and prepare data
+        edge_types = list(args.edge_types.keys())
+        layer_nums = range(1, args.num_layers + 1)
+        data = {edge_type: [] for edge_type in edge_types}
+
+        # Collect data for each layer
+        for layer_idx in range(1, args.num_layers + 1):
+            layer_key = f'Layer_{layer_idx}'
+            layer_data = graph_metrics[layer_key]['edge_type_importance']
+            for edge_type in edge_types:
+                data[edge_type].append(layer_data[edge_type])
+
+        # Create stacked bar plot
+        bottom = np.zeros(args.num_layers)
+
+        for edge_type in edge_types:
+            plt.bar(layer_nums, data[edge_type], bottom=bottom, width=0.3,
+                    label=edge_type, color=args.edge_colors[edge_type],
+                    alpha=0.7, edgecolor='black', linewidth=1)
+
+            # Add percentage labels
+            for idx, value in enumerate(data[edge_type]):
+                height = value / 2 + bottom[idx]
+                plt.text(layer_nums[idx], height, f'{value:.1%}',
+                         ha='center', va='center')
+
+            bottom += data[edge_type]
+
+        # Customize plot
+        plt.title(f'Edge Type Importance\nPatient {patient_id} - {args.label_dict[str(label)]}',
+                  pad=20, fontsize=12, fontweight='bold')
+        plt.xlabel('Layer', fontsize=10)
+        plt.ylabel('Edge Type Importance', fontsize=10)
+
+        # Format y-axis as percentage
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+
+        # Add grid and legend
+        plt.grid(True, axis='y', linestyle='--', alpha=0.3)
+        plt.legend(title='Edge Types', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+        # Set x-ticks
+        plt.xticks(layer_nums)
+
+        # Adjust layout and save
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'edge_type_importance.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_patient_specific_metrics(self, args, all_metrics, fold_dir):
+        """
+        Generate all patient-specific visualizations with error handling.
+
+        Args:
+            args: Configuration arguments
+            all_metrics: Dictionary of all patient metrics
+            fold_dir: Base directory for saving visualizations
+        """
+        # Track successful and failed visualizations for reporting
+        visualization_stats = {
+            'total': len(all_metrics),
+            'successful': 0,
+            'failed': [],
+            'warnings': []
+        }
+
+        for patient_id, patient_data in all_metrics.items():
+            try:
+                # Create patient-specific directory
+                patient_dir = os.path.join(fold_dir, str(patient_id))
+                os.makedirs(patient_dir, exist_ok=True)
+
+                # Validate patient data structure
+                if not self._validate_patient_data(patient_data):
+                    visualization_stats['failed'].append({
+                        'patient_id': patient_id,
+                        'reason': 'Invalid data structure'
+                    })
+                    continue
+
+                # Generate all visualizations for this patient
+                visualization_functions = [
+                    (self.plot_patient_layer_attention, "layer attention"),
+                    (self.plot_patient_layer_entropy, "layer entropy"),
+                    (self.plot_patient_stain_attention, "stain attention"),
+                    (self.plot_patient_stain_entropy, "stain entropy"),
+                    (self.plot_patient_edge_importance, "edge importance")
+                ]
+
+                for viz_func, viz_name in visualization_functions:
+                    try:
+                        viz_func(args, patient_id, patient_data, patient_dir)
+                    except Exception as e:
+                        visualization_stats['warnings'].append({
+                            'patient_id': patient_id,
+                            'visualization': viz_name,
+                            'error': str(e)
+                        })
+
+                # Generate summary plots if patient has multiple stains
+                if self._has_multiple_stains(patient_data):
+                    self._generate_multi_stain_summaries(
+                        args, patient_id, patient_data, patient_dir)
+
+                visualization_stats['successful'] += 1
+
+            except Exception as e:
+                visualization_stats['failed'].append({
+                    'patient_id': patient_id,
+                    'reason': str(e)
+                })
+
+        # Generate visualization report
+        self._save_visualization_report(visualization_stats, fold_dir)
+
+    def _validate_patient_data(self, patient_data):
+        """
+        Validate the structure of patient data.
+
+        Expected structure:
+        - patient_data[0]: label
+        - patient_data[1]: predicted label
+        - patient_data[2]: stain attentions
+        - patient_data[3]: layer attentions
+        - patient_data[4]: entropy scores
+        - patient_data[5]: graph metrics
+        """
+        try:
+            required_lengths = {
+                'basic': 6,  # Total number of main elements
+                'stain_attentions': len(patient_data[3]),  # Should match number of layers
+                'layer_attentions': len(patient_data[3]),
+                'entropy_scores': len(patient_data[3])
+            }
+
+            # Check basic structure
+            if len(patient_data) < required_lengths['basic']:
+                return False
+
+            # Check consistent lengths across layer-specific data
+            if not (len(patient_data[2]) == len(patient_data[3]) == len(patient_data[4])):
+                return False
+
+            # Check data types
+            if not (isinstance(patient_data[0], (int, np.integer)) and
+                    isinstance(patient_data[1], (int, np.integer))):
+                return False
+
+            return True
+
+        except Exception:
+            return False
+
+    def _has_multiple_stains(self, patient_data):
+        """Check if patient has multiple stain types."""
+        unique_stains = set()
+        for stain_dict in patient_data[2]:  # stain_attentions
+            unique_stains.update(stain_dict.keys())
+        return len(unique_stains) > 1
+
+    def _generate_multi_stain_summaries(self, args, patient_id, patient_data, output_dir):
+        """Generate additional visualizations for multi-stain patients."""
+
+        # Layer-wise stain importance trends
+        self._plot_stain_importance_trends(args, patient_id, patient_data, output_dir)
+
+    def _save_visualization_report(self, stats, fold_dir):
+        """Save a report of the visualization process."""
+        report_path = os.path.join(fold_dir, 'visualization_report.txt')
+
+        with open(report_path, 'w') as f:
+            f.write("Visualization Report\n")
+            f.write("===================\n\n")
+            f.write(f"Total patients processed: {stats['total']}\n")
+            f.write(f"Successfully processed: {stats['successful']}\n")
+            f.write(f"Failed: {len(stats['failed'])}\n\n")
+
+            if stats['failed']:
+                f.write("Failed Patients:\n")
+                for failure in stats['failed']:
+                    f.write(f"- Patient {failure['patient_id']}: {failure['reason']}\n")
+                f.write("\n")
+
+            if stats['warnings']:
+                f.write("Warnings:\n")
+                for warning in stats['warnings']:
+                    f.write(f"- Patient {warning['patient_id']}, "
+                            f"{warning['visualization']}: {warning['error']}\n")
+
+    def plot_patient_layer_entropy(self, args, patient_id, patient_data, output_dir):
+        """Generate layer-wise entropy visualization for global entropy."""
+        label = patient_data[0]
+        entropy_scores = patient_data[4]
+
+        # Extract global entropy scores for each layer
+        global_entropy = [layer_dict['global'][0] if 'global' in layer_dict else 0
+                          for layer_dict in entropy_scores]
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # # Add grid first (behind the bars)
+        # ax.grid(True, color='white', linewidth=1.5, zorder=0)
+        # ax.set_axisbelow(True)
+
+        # Prepare data
+        layers = [f'Layer {i + 1}' for i in range(len(global_entropy))]
+        x_positions = range(len(global_entropy))
+
+        # red color gradient for bars
+        colors = plt.cm.Reds(np.linspace(0.3, 0.9, len(global_entropy)))
+
+        # Create bars
+        bars = ax.bar(x_positions, global_entropy,
+                      width=0.6,
+                      color=colors,
+                      edgecolor='black',
+                      linewidth=0.5,
+                      zorder=2)
+
+        # Add value labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    height,
+                    f'{height:.3f}',
+                    ha='center',
+                    va='bottom',
+                    fontsize=9,
+                    color='#222222',
+                    zorder=3)
+
+        # Customize plot
+        ax.set_title(f'Patient {patient_id} - {args.label_dict[str(label)]}',
+                     fontsize=11, fontweight='bold', color='#222222')
+        ax.set_ylabel('Global Entropy Score', fontsize=10, color='#444444')
+
+        # Set x-ticks and labels
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(layers)
+
+        # Style ticks
+        plt.setp(ax.get_xticklabels(), fontsize=9)
+        plt.setp(ax.get_yticklabels(), fontsize=9)
+
+        # Set fixed x-axis limits with padding
+        ax.set_xlim(-0.5, len(global_entropy) - 0.5)
+
+        # Add some padding to y-axis for labels
+        ymax = max(global_entropy)
+        #ax.set_ylim(0, ymax * 1.15)
+        ax.set_ylim(0, 10)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'layer_entropy_global.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_patient_stain_entropy(self, args, patient_id, patient_data, output_dir):
+        """Generate stain-wise entropy visualization for a patient."""
+        label = patient_data[0]
+        entropy_scores = patient_data[4]
+
+        # Create figure with shared y-axis label
+        fig = plt.figure(figsize=(8, 12))
+        gs = fig.add_gridspec(len(entropy_scores), 1, hspace=0.2)
+        axs = [fig.add_subplot(gs[i]) for i in range(len(entropy_scores))]
+
+        # Add common y-axis label
+        fig.text(-0.02, 0.5, 'Stain Entropy Score', va='center', rotation='vertical', fontsize=12)
+
+        # Title
+        fig.suptitle(f'Patient {patient_id} - {args.label_dict[str(label)]}',
+                     fontsize=14, fontweight='bold', y=0.95)
+
+        # Get stain information
+        stain_names = {v: k for k, v in args.stain_types.items()}
+        stain_order = sorted([k for k, v in stain_names.items() if v != 'NA'])
+
+        # Plot each layer
+        for layer_idx, layer_dict in enumerate(entropy_scores):
+            ax = axs[layer_idx]
+
+            # Prepare data
+            values = [0.0] * len(stain_order)
+            colors = [args.stain_colors[stain_names[s]] for s in stain_order]
+
+            # Fill in actual values
+            for stain in stain_order:
+                if stain in layer_dict:
+                    idx = stain_order.index(stain)
+                    stain_scores = layer_dict[stain]
+                    values[idx] = np.mean(stain_scores) if isinstance(stain_scores, list) else stain_scores
+
+            # Create bars
+            x_positions = range(len(stain_order))
+            bars = ax.bar(x_positions, values,
+                          width=0.3,
+                          color=colors,
+                          alpha=0.7,
+                          edgecolor='black',
+                          linewidth=1)
+
+            # Customize plot
+            ax.text(-0.1, 0.5, f'Layer {layer_idx + 1}',
+                    transform=ax.transAxes, fontsize=11,
+                    rotation='vertical', verticalalignment='center')
+            ax.set_ylim(0, 10)  # Fixed y-limit for entropy scores
+
+            # Add value labels
+            for bar in bars:
+                height = bar.get_height()
+                if height > 0:
+                    ax.text(bar.get_x() + bar.get_width() / 2., height,
+                            f'{height:.3f}',
+                            ha='center', va='bottom', fontsize=11)
+
+            # Configure axes
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels([stain_names[s] for s in stain_order])
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+
+            # Remove top and right spines
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+
+        plt.savefig(os.path.join(output_dir, 'stain_entropy.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def _plot_stain_importance_trends(self, args, patient_id, patient_data, output_dir):
+        """
+        Plot layer-wise trends of stain importance for multi-stain patients.
+        Shows how each stain's importance changes across layers.
+        """
+        label = patient_data[0]
+        stain_attentions = patient_data[2]
+
+        # Get stain information
+        stain_names = {v: k for k, v in args.stain_types.items()}
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(15, 6))
+
+        # Prepare data
+        layers = range(1, len(stain_attentions) + 1)
+
+        # Track all stains present in any layer
+        all_stains = set()
+        for layer_data in stain_attentions:
+            all_stains.update(layer_data.keys())
+
+        # Remove NA if present
+        all_stains = {s for s in all_stains if stain_names[s] != 'NA'}
+
+        # Create trend lines for each stain
+        for stain in sorted(all_stains):
+            stain_values = []
+            for layer_data in stain_attentions:
+                value = layer_data.get(stain, 0.0)
+                stain_values.append(float(value))
+
+            # Plot trend line with markers
+            ax.plot(layers, stain_values,
+                    marker='o',
+                    linewidth=2,
+                    markersize=8,
+                    label=stain_names[stain],
+                    color=args.stain_colors[stain_names[stain]],
+                    alpha=0.7)
+
+            # Add value labels
+            for x, y in zip(layers, stain_values):
+                ax.text(x, y, f'{y:.2f}',
+                        ha='center', va='bottom',
+                        fontsize=8)
+
+        # Customize plot
+        ax.set_title(f'Stain Importance Trends Across Layers\nPatient {patient_id} - {args.label_dict[str(label)]}',
+                     pad=20, fontsize=12, fontweight='bold')
+        ax.set_xlabel('Layer', fontsize=10)
+        ax.set_ylabel('Stain Importance Score', fontsize=10)
+
+        # Set axis limits
+        ax.set_xlim(0.5, len(layers) + 0.5)
+        ax.set_ylim(0, 1.15)  # Importance scores are normalized
+
+        # Configure grid
+        ax.grid(True, linestyle='--', alpha=0.3)
+        ax.set_axisbelow(True)
+
+        # Set x-ticks
+        ax.set_xticks(layers)
+        ax.set_xticklabels([f'Layer {i}' for i in layers])
+
+        # Add legend
+        ax.legend(title='Stain Types',
+                  bbox_to_anchor=(1.05, 1),
+                  loc='upper left')
+
+        # Save plot
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'stain_importance_trends.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+
+    #  Aggregated visualizations
+    ## -----------------------------------------------------------------------------------------------------------------
+
+    def plot_aggregate_metrics(self, args, all_metrics, fold_dir):
+        """Generate all aggregate visualizations."""
+        # Identify multi-stain patients
+        multi_stain_patients = self._get_multi_stain_patients(all_metrics)
+
+        # Generate multi-stain report
+        self._generate_multi_stain_report(multi_stain_patients, fold_dir)
+
+        # Stain-related visualizations (for all patients and multi-stain subset)
+        self.plot_stain_importance_by_label(args, all_metrics, fold_dir, "all")
+        self.plot_stain_importance_by_layer(args, all_metrics, fold_dir, "all")
+        self.plot_entropy_scores_by_label(args, all_metrics, fold_dir, 'all')
+        self.plot_entropy_scores_by_layer(args, all_metrics, fold_dir, 'all')
+
+        if multi_stain_patients:
+            self.plot_stain_importance_by_label(args, multi_stain_patients, fold_dir, "multi_stain")
+            self.plot_stain_importance_by_layer(args, multi_stain_patients, fold_dir, "multi_stain")
+            self.plot_entropy_scores_by_label(args, multi_stain_patients, fold_dir, 'multi_stain')
+            self.plot_entropy_scores_by_layer(args, multi_stain_patients, fold_dir, 'multi_stain')
+
+        # Layer attention visualizations
+        self.plot_layer_attention_by_label(args, all_metrics, fold_dir)
+
+        # Edge-related visualizations
+        self.plot_edge_importance_by_label(args, all_metrics, fold_dir)
+
+    def _get_multi_stain_patients(self, all_metrics):
+        """
+        Identify patients with multiple stain types across layers.
+
+        Args:
+            all_metrics (dict): Dictionary of all patient metrics.
+
+        Returns:
+            dict: Dictionary containing only patients with multiple stain types.
+        """
+        multi_stain_patients = {}
+
+        for patient_id, patient_data in all_metrics.items():
+            # Get unique stains across all layers
+            unique_stains = set()
+            for stain_dict in patient_data[2]:  # stain_attentions
+                # Only count non-empty stain attentions
+                current_stains = {stain for stain, value in stain_dict.items()
+                                  if value > 0}  # Filter out zero-value stains
+                unique_stains.update(current_stains)
+
+            # If patient has more than one stain type (excluding any NA stains)
+            active_stains = {stain for stain in unique_stains
+                             if str(stain) != 'NA' and str(stain) != '-1'}
+
+            if len(active_stains) > 1:
+                multi_stain_patients[patient_id] = patient_data
+
+        return multi_stain_patients
+
+    def _generate_multi_stain_report(self, multi_stain_patients, fold_dir):
+        """Generate a detailed report about multi-stain patients."""
+        report_lines = [
+            "Multi-stain Patient Report",
+            "=======================\n",
+            f"Total multi-stain patients: {len(multi_stain_patients)}",
+            "\nPatient IDs and their stain combinations:"
+        ]
+
+        # Sort patients by ID for consistent reporting
+        sorted_patients = sorted(multi_stain_patients.items())
+
+        for patient_id, patient_data in sorted_patients:
+            # Get unique stains across all layers
+            unique_stains = set()
+            for stain_dict in patient_data[2]:  # stain_attentions
+                unique_stains.update(stain_dict.keys())
+
+            stains_str = ", ".join(sorted(str(s) for s in unique_stains))
+            report_lines.append(f"\nPatient {patient_id}:")
+            report_lines.append(f"  Stains: {stains_str}")
+            report_lines.append(f"  Label: {patient_data[0]}")
+
+        # Save report
+        report_path = os.path.join(fold_dir, 'multi_stain_report.txt')
+        with open(report_path, 'w') as f:
+            f.write("\n".join(report_lines))
+
+    def plot_stain_importance_by_label(self, args, patient_data, fold_dir, subset_type):
+        """Plot stain importance distribution by label using boxplots."""
+        # Initialize data structure for each label
         label_data = {0: {}, 1: {}}
 
-        for patient_id, patient_data in all_metrics.items():
-            label = patient_data[patient_id][0]['Label']
-            layers = patient_data[patient_id][1]
+        # Collect data for each patient
+        for patient_id, data in patient_data.items():
+            label = data[0]
+            graph_metrics = data[5][patient_id][1]
 
-            for layer in layers.values():
-                for stain, importance in layer['stain_importance'].items():
+            # Process each layer's stain importance
+            for layer_key in [f'Layer_{i}' for i in range(1, args.num_layers + 1)]:
+                stain_importance = graph_metrics[layer_key]['stain_importance']
+                for stain, importance in stain_importance.items():
                     if stain not in label_data[label]:
                         label_data[label][stain] = []
                     label_data[label][stain].append(importance)
 
+        # Create plot
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        fig.suptitle(f'Stain Importance Distribution by Label ({subset_type.replace("_", " ").title()} Patients)',
+                     fontsize=14, fontweight='bold', y=1.05)
 
-        for i, (label, data) in enumerate(label_data.items()):
-            ax = ax1 if i == 0 else ax2
-            box_data = [data[stain] for stain in data]
-            ax.boxplot(box_data, labels=list(data.keys()))
-            ax.set_title(f'Stain Importance for Label {label}')
-            ax.set_ylabel('Importance')
-            ax.set_xlabel('Stain Type')
+        # Plot for each label
+        for label_idx in [0, 1]:
+            ax = ax1 if label_idx == 0 else ax2
+            data = label_data[label_idx]
+
+            # Prepare data for boxplot
+            stain_order = [s for s in sorted(data.keys()) if s != 'NA']
+            box_data = [data[stain] for stain in stain_order]
+            colors = [args.stain_colors[label] for label in stain_order]
+
+            # Create boxplot
+            bp = ax.boxplot(box_data,
+                            labels=stain_order,
+                            patch_artist=True,
+                            medianprops=dict(color="black", linewidth=1.5),
+                            flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+            # Color boxes
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # Add summary statistics
+            for i, values in enumerate(box_data, 1):
+                mean = np.mean(values)
+                std = np.std(values)
+                stats_text = f'μ={mean:.2f}\nσ={std:.2f}'
+                ax.text(i, -0.2, stats_text,
+                        ha='center', va='top', fontsize=10)
+
+            # Customize plot
+            ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                         pad=20, fontsize=12, fontweight='bold')
+            if label_idx == 0:
+                ax.set_ylabel('Stain Importance Score', fontsize=10)
+
+            ax.set_ylim(-0.05, 1.15)
+
+            # Style improvements
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+            ax.set_axisbelow(True)
+            plt.setp(ax.get_xticklabels(), rotation=0, ha='center', fontsize=10)
+
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.2f}'.format(y)))
 
         plt.tight_layout()
-        plt.savefig(f"{fold_dir}/stain_importance_by_label.png", dpi=300,
-                    bbox_inches='tight')
+        plt.savefig(os.path.join(fold_dir, f'stain_importance_by_label_{subset_type}.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
 
-    def plot_edge_importance(self, all_metrics, fold_dir):
-        overall_data = {}
+    def plot_stain_importance_by_layer(self, args, patient_data, fold_dir, subset_type):
+        """Plot stain importance distribution by label and layer using boxplots."""
+        # Initialize data structure for each label and layer
+        label_data = {0: {}, 1: {}}
+        for label in [0, 1]:
+            label_data[label] = {f'Layer_{i}': {} for i in range(1, args.num_layers + 1)}
+
+        # Collect data for each patient
+        for patient_id, data in patient_data.items():
+            label = data[0]
+            graph_metrics = data[5][patient_id][1]
+
+            # Process each layer's stain importance
+            for layer_key in [f'Layer_{i}' for i in range(1, args.num_layers + 1)]:
+                stain_importance = graph_metrics[layer_key]['stain_importance']
+                for stain, importance in stain_importance.items():
+                    if stain not in label_data[label][layer_key]:
+                        label_data[label][layer_key][stain] = []
+                    label_data[label][layer_key][stain].append(importance)
+
+        # Create plot with multiple layers
+        fig, axs = plt.subplots(args.num_layers, 2, figsize=(15, 5 * args.num_layers))
+        fig.suptitle(f'Stain Importance Distribution by Layer ({subset_type.replace("_", " ").title()} Patients)',
+                     fontsize=14, fontweight='bold', y=1.00)
+
+        # Get stain information
+        stain_names = {v: k for k, v in args.stain_types.items()}
+
+        # Plot for each layer and label
+        for layer_idx in range(args.num_layers):
+            layer_key = f'Layer_{layer_idx + 1}'
+
+            for label_idx in [0, 1]:
+                ax = axs[layer_idx, label_idx]
+                data = label_data[label_idx][layer_key]
+
+                # Prepare data for boxplot
+                stain_order = [s for s in sorted(data.keys()) if s != 'NA']
+                box_data = [data[stain] for stain in stain_order]
+                colors = [args.stain_colors[label] for label in stain_order]
+
+                # Create boxplot
+                bp = ax.boxplot(box_data,
+                                labels=stain_order,
+                                patch_artist=True,
+                                medianprops=dict(color="black", linewidth=1.5),
+                                flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+                # Color boxes
+                for patch, color in zip(bp['boxes'], colors):
+                    patch.set_facecolor(color)
+                    patch.set_alpha(0.7)
+
+                # Customize plot
+                if layer_idx == 0:
+                    ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                                 pad=20, fontsize=12, fontweight='bold')
+                if label_idx == 0:
+                    ax.set_ylabel(f'Layer {layer_idx + 1}\n Stain Importance Score', fontsize=10)
+                if layer_idx == args.num_layers - 1:
+                    ax.set_xlabel('Stain Type', fontsize=10)
+
+                ax.set_ylim(-0.05, 1.15)
+
+                # Style improvements
+                ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+                ax.set_axisbelow(True)
+                plt.setp(ax.get_xticklabels(), rotation=0, ha='center', fontsize=10)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(fold_dir, f'stain_importance_by_layer_{subset_type}.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_entropy_scores_by_label(self, args, all_metrics, fold_dir, subset_type):
+        """Plot entropy scores distribution by label using boxplots."""
+        # Initialize data structures for global and stain-specific entropy
+        label_data = {
+            0: {'global': [], 'stains': {}},
+            1: {'global': [], 'stains': {}}
+        }
+
+        # Collect data
+        for patient_id, patient_data in all_metrics.items():
+            label = patient_data[0]
+            entropy_scores = patient_data[4]
+
+            for layer_dict in entropy_scores:
+                # Handle global entropy
+                if 'global' in layer_dict:
+                    label_data[label]['global'].extend(
+                        layer_dict['global'] if isinstance(layer_dict['global'], list)
+                        else [layer_dict['global']]
+                    )
+
+                # Handle stain-specific entropy
+                for stain_type, scores in layer_dict.items():
+                    if stain_type != 'global':
+                        if stain_type not in label_data[label]['stains']:
+                            label_data[label]['stains'][stain_type] = []
+                        label_data[label]['stains'][stain_type].extend(
+                            scores if isinstance(scores, list) else [scores]
+                        )
+
+        self._plot_stain_entropy_by_label(args, label_data, fold_dir, subset_type)
+
+    def _plot_stain_entropy_by_label(self, args, label_data, fold_dir, subset_type):
+        """Plot stain-specific entropy scores by label."""
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        stain_names = {v: k for k, v in args.stain_types.items()}
+
+        for label_idx in [0, 1]:
+            ax = ax1 if label_idx == 0 else ax2
+            stain_entropy = label_data[label_idx]['stains']
+
+            # Prepare data for boxplot
+            stain_order = sorted(stain_entropy.keys())
+            box_data = [stain_entropy[stain] for stain in stain_order]
+            labels = [stain_names[s] for s in stain_order]
+            colors = [args.stain_colors[label] for label in labels]
+
+            # Create boxplot
+            bp = ax.boxplot(box_data,
+                            labels=labels,
+                            patch_artist=True,
+                            medianprops=dict(color="black", linewidth=1.5),
+                            flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+            # Color boxes
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # Add summary statistics
+            for i, values in enumerate(box_data, 1):
+                mean = np.mean(values)
+                std = np.std(values)
+                stats_text = f'μ={mean:.2f}\nσ={std:.2f}'
+                ax.text(i, -1.0, stats_text,
+                        ha='center', va='top', fontsize=10)
+
+            # Customize plot
+            ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                         pad=20, fontsize=12, fontweight='bold')
+            if label_idx == 0:
+                ax.set_ylabel('Stain Entropy Score', fontsize=10)
+
+            # Style improvements
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+            ax.set_axisbelow(True)
+            plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+            ax.set_ylim(-0.1, 10)
+
+        plt.suptitle(f'Stain Entropy Distribution by Label ({subset_type.replace("_", " ").title()} Patients)',
+                     fontsize=14, fontweight='bold', y=1.05)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(fold_dir, f'stain_entropy_by_label_{subset_type}.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_entropy_scores_by_layer(self, args, all_metrics, fold_dir, subset_type):
+        """Plot entropy scores distribution by layer and label."""
+        # Initialize data structure for each label and layer
+        label_data = {0: {}, 1: {}}
+        for label in [0, 1]:
+            label_data[label] = {
+                'global': [[] for _ in range(args.num_layers)],
+                'stains': {}
+            }
+
+        # Collect data
+        for patient_id, patient_data in all_metrics.items():
+            label = patient_data[0]
+            entropy_scores = patient_data[4]
+
+            # Process each layer
+            for layer_idx, layer_dict in enumerate(entropy_scores):
+                # Handle global entropy
+                if 'global' in layer_dict:
+                    scores = layer_dict['global']
+                    scores = scores if isinstance(scores, list) else [scores]
+                    label_data[label]['global'][layer_idx].extend(scores)
+
+                # Handle stain-specific entropy
+                for stain_type, scores in layer_dict.items():
+                    if stain_type != 'global':
+                        if stain_type not in label_data[label]['stains']:
+                            label_data[label]['stains'][stain_type] = [[] for _ in range(args.num_layers)]
+                        scores = scores if isinstance(scores, list) else [scores]
+                        label_data[label]['stains'][stain_type][layer_idx].extend(scores)
+
+        # Create separate plots for global and stain entropy
+        self._plot_layer_wise_global_entropy(args, label_data, fold_dir, subset_type)
+        self._plot_layer_wise_stain_entropy(args, label_data, fold_dir, subset_type)
+
+    def _plot_layer_wise_global_entropy(self, args, label_data, fold_dir, subset_type):
+        """Plot layer-wise global entropy distribution."""
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Define color gradient for layers
+        colors = plt.cm.Reds(np.linspace(0.3, 0.9, args.num_layers))
+
+        for label_idx in [0, 1]:
+            ax = ax1 if label_idx == 0 else ax2
+            global_entropy = label_data[label_idx]['global']
+
+            # Create boxplot
+            bp = ax.boxplot(global_entropy,
+                            labels=[f'Layer {i + 1}' for i in range(args.num_layers)],
+                            patch_artist=True,
+                            medianprops=dict(color="black", linewidth=1.5),
+                            flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+            # Color boxes
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # Add summary statistics
+            for i, layer_data in enumerate(global_entropy, 1):
+                if layer_data:  # Only add stats if we have data
+                    mean = np.mean(layer_data)
+                    std = np.std(layer_data)
+                    counts = len(layer_data)
+                    stats_text = f'μ={mean:.2f}\nσ={std:.2f}'
+                    ax.text(i, -1.0, stats_text,
+                            ha='center', va='top', fontsize=8)
+
+            # Customize plot
+            ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                         pad=20, fontsize=12, fontweight='bold')
+            if label_idx == 0:
+                ax.set_ylabel('Global Entropy Score', fontsize=10)
+
+            # Style improvements
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+            ax.set_axisbelow(True)
+
+            ax.set_ylim(-0.1, 10)
+
+        plt.suptitle(f'Layer-wise Global Entropy Distribution by Label ({subset_type.replace("_", " ").title()} Patients)',
+                     fontsize=14, fontweight='bold', y=1.05)
+        plt.tight_layout()
+        plt.savefig(os.path.join(fold_dir, f'global_entropy_by_layer_{subset_type}.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def _plot_layer_wise_stain_entropy(self, args, label_data, fold_dir, subset_type):
+        """Plot layer-wise stain entropy distribution."""
+        stain_names = {v: k for k, v in args.stain_types.items()}
+
+        # Create a single figure with subplots arranged in a grid
+        fig, axs = plt.subplots(args.num_layers, 2,
+                                figsize=(15, 5 * args.num_layers))
+        if args.num_layers == 1:
+            axs = axs.reshape(1, 2)
+
+        # Plot each layer
+        for layer_idx in range(args.num_layers):
+            # Plot each label
+            for label_idx in [0, 1]:
+                ax = axs[layer_idx, label_idx]
+
+                # Skip if no stain data for this label
+                if not label_data[label_idx]['stains']:
+                    ax.text(0.5, 0.5, 'No data available',
+                            ha='center', va='center')
+                    continue
+
+                # Prepare data for boxplot
+                stain_order = sorted(label_data[label_idx]['stains'].keys())
+                box_data = [label_data[label_idx]['stains'][stain][layer_idx]
+                            for stain in stain_order]
+                labels = [stain_names[s] for s in stain_order]
+                colors = [args.stain_colors[label] for label in labels]
+
+                # Create boxplot
+                bp = ax.boxplot(box_data,
+                                labels=labels,
+                                patch_artist=True,
+                                medianprops=dict(color="black", linewidth=1.5),
+                                flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+                # Color boxes
+                for patch, color in zip(bp['boxes'], colors):
+                    patch.set_facecolor(color)
+                    patch.set_alpha(0.7)
+
+                # Customize plot
+                if layer_idx == 0:
+                    ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                                 pad=20, fontsize=12, fontweight='bold')
+                if label_idx == 0:
+                    ax.set_ylabel(f'Layer {layer_idx + 1}\n Stain Entropy Score', fontsize=10)
+                if layer_idx == args.num_layers - 1:
+                    ax.set_xlabel('Stain Type', fontsize=10)
+
+                ax.set_ylim(-0.1, 10)
+
+                # Style improvements
+                ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+                ax.set_axisbelow(True)
+                plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+
+        plt.suptitle(f'Layer-wise Stain Entropy Distribution by Label ({subset_type.replace("_", " ").title()} Patients)',
+                     fontsize=14, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        plt.savefig(os.path.join(fold_dir, f'stain_entropy_by_layer_{subset_type}.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_layer_attention_by_label(self, args, all_metrics, fold_dir):
+        """Plot layer attention scores distribution by label."""
+        # Initialize data structures
+        label_data = {0: [], 1: []}
+
+        # Collect layer attention scores
+        for patient_id, patient_data in all_metrics.items():
+            label = patient_data[0]
+            layer_attention = patient_data[3]
+            label_data[label].append(layer_attention)
+
+        # Create figure
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Define color gradient for layers
+        colors = plt.cm.Reds(np.linspace(0.3, 0.9, args.num_layers))
+
+        for label_idx in [0, 1]:
+            ax = ax1 if label_idx == 0 else ax2
+            scores = label_data[label_idx]
+
+            # Transpose to get layer-wise grouping
+            box_data = list(map(list, zip(*scores)))
+
+            # Create boxplot
+            bp = ax.boxplot(box_data,
+                            labels=[f'Layer {i + 1}' for i in range(args.num_layers)],
+                            patch_artist=True,
+                            medianprops=dict(color="black", linewidth=1.5),
+                            flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+            # Color boxes
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # Add summary statistics
+            for i, layer_data in enumerate(box_data, 1):
+                mean = np.mean(layer_data)
+                std = np.std(layer_data)
+                stats_text = f'μ={mean:.2f}\nσ={std:.2f}'
+                ax.text(i, -0.2, stats_text,
+                        ha='center', va='top', fontsize=8)
+
+            # Customize plot
+            ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                         pad=20, fontsize=12, fontweight='bold')
+            if label_idx == 0:
+                ax.set_ylabel('Layer Attention Score', fontsize=10)
+
+            # Style improvements
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+            ax.set_axisbelow(True)
+
+            # Set y-axis limits
+            ax.set_ylim(-0.05, 1.15)  # Allow space for statistics below
+
+        plt.suptitle('Layer Attention Distribution by Label',
+                     fontsize=14, fontweight='bold', y=1.05)
+        plt.tight_layout()
+        plt.savefig(os.path.join(fold_dir, 'layer_attention_by_label.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    def plot_edge_importance_by_label(self, args, all_metrics, fold_dir):
+        """Plot edge importance distribution by label."""
+        # Initialize data structure
         label_data = {0: {}, 1: {}}
 
+        # Collect data
         for patient_id, patient_data in all_metrics.items():
-            label = patient_data[patient_id][0]['Label']
-            layers = patient_data[patient_id][1]
+            label = patient_data[0]
+            graph_metrics = patient_data[5][patient_id][1]
 
-            for layer in layers.values():
-                for edge_type, importance in layer['edge_type_importance'].items():
-                    if edge_type not in overall_data:
-                        overall_data[edge_type] = []
-                    overall_data[edge_type].append(importance)
-
+            for layer_key in [f'Layer_{i}' for i in range(1, args.num_layers + 1)]:
+                edge_importance = graph_metrics[layer_key]['edge_type_importance']
+                for edge_type, importance in edge_importance.items():
                     if edge_type not in label_data[label]:
                         label_data[label][edge_type] = []
                     label_data[label][edge_type].append(importance)
 
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 6))
+        # Create plot
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
-        # Overall
-        box_data = [overall_data[edge_type] for edge_type in overall_data]
-        ax1.boxplot(box_data, labels=list(overall_data.keys()))
-        ax1.set_title('Overall Edge Type Importance')
-        ax1.set_ylabel('Importance')
-        ax1.set_xlabel('Edge Type')
+        for label_idx in [0, 1]:
+            ax = ax1 if label_idx == 0 else ax2
+            data = label_data[label_idx]
 
-        # By label
-        for i, (label, data) in enumerate(label_data.items()):
-            ax = ax2 if i == 0 else ax3
-            box_data = [data[edge_type] for edge_type in data]
-            ax.boxplot(box_data, labels=list(data.keys()))
-            ax.set_title(f'Edge Type Importance for Label {label}')
-            ax.set_ylabel('Importance')
-            ax.set_xlabel('Edge Type')
+            # Prepare data for boxplot
+            edge_types = list(data.keys())
+            box_data = [data[edge_type] for edge_type in edge_types]
+            colors = [args.edge_colors[edge_type] for edge_type in edge_types]
 
+            # Create boxplot
+            bp = ax.boxplot(box_data,
+                            labels=edge_types,
+                            patch_artist=True,
+                            medianprops=dict(color="black", linewidth=1.5),
+                            flierprops=dict(marker='o', markerfacecolor='gray', markersize=4))
+
+            # Color boxes
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # Add summary statistics
+            for i, values in enumerate(box_data, 1):
+                mean = np.mean(values)
+                std = np.std(values)
+                counts = len(values)
+                stats_text = f'μ={mean:.2f}\nσ={std:.2f}'
+                ax.text(i, -0.05, stats_text,
+                        ha='center', va='top', fontsize=8)
+
+            # Customize plot
+            ax.set_title(f'{args.label_dict[str(label_idx)]}',
+                         pad=20, fontsize=12, fontweight='bold')
+            if label_idx == 0:
+                ax.set_ylabel('Edge Importance', fontsize=10)
+
+            # Set y-axis limits
+            ax.set_ylim(-0.0, 1.0)
+
+            # Set y-axis to percentage format
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+
+            # Style improvements
+            ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+            ax.set_axisbelow(True)
+
+        plt.suptitle('Edge Type Importance Distribution by Label',
+                     fontsize=14, fontweight='bold', y=1.05)
         plt.tight_layout()
-        plt.savefig(f"{fold_dir}/stain_importance_overall.png", dpi=300,
-                    bbox_inches='tight')
+        plt.savefig(os.path.join(fold_dir, 'edge_importance_by_label.png'),
+                    dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-
-
-    def plot_stain_edge_correlation(self, all_metrics, fold_dir):
-        data = []
-
-        for patient_id, patient_data in all_metrics.items():
-            label = patient_data[patient_id][0]['Label']
-            layers = patient_data[patient_id][1]
-
-            for layer_name, layer in layers.items():
-                layer_data = {
-                    'Patient': patient_id,
-                    'Label': label,
-                    'Layer': layer_name
-                }
-                layer_data.update(layer['stain_importance'])
-                layer_data.update(layer['edge_type_importance'])
-                data.append(layer_data)
-
-        df = pd.DataFrame(data)
-
-        plt.figure(figsize=(12, 10))
-        sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
-        plt.title('Correlation between Stain and Edge Type Importance')
-        plt.savefig(f"{fold_dir}/stain_edge_correlations.png", dpi=300,
-                    bbox_inches='tight')
-        plt.close()
-
-    def plot_importance_trends(self, all_metrics, fold_dir):
-        stain_data = {}
-        edge_data = {}
-
-        for patient_id, patient_data in all_metrics.items():
-            layers = patient_data[patient_id][1]
-            for layer_name, layer in layers.items():
-                layer_num = int(layer_name.split('_')[1])
-
-                for stain, importance in layer['stain_importance'].items():
-                    if stain not in stain_data:
-                        stain_data[stain] = {}
-                    if layer_num not in stain_data[stain]:
-                        stain_data[stain][layer_num] = []
-                    stain_data[stain][layer_num].append(importance)
-
-                for edge_type, importance in layer['edge_type_importance'].items():
-                    if edge_type not in edge_data:
-                        edge_data[edge_type] = {}
-                    if layer_num not in edge_data[edge_type]:
-                        edge_data[edge_type][layer_num] = []
-                    edge_data[edge_type][layer_num].append(importance)
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
-
-        for stain in stain_data:
-            layers = sorted(stain_data[stain].keys())
-            means = [np.mean(stain_data[stain][layer]) for layer in layers]
-            ax1.plot(layers, means, marker='o', label=stain)
-
-        ax1.set_title('Stain Importance Trends Across Layers')
-        ax1.set_xlabel('Layer')
-        ax1.set_ylabel('Average Importance')
-        ax1.legend()
-
-        for edge_type in edge_data:
-            layers = sorted(edge_data[edge_type].keys())
-            means = [np.mean(edge_data[edge_type][layer]) for layer in layers]
-            ax2.plot(layers, means, marker='o', label=edge_type)
-
-        ax2.set_title('Edge Type Importance Trends Across Layers')
-        ax2.set_xlabel('Layer')
-        ax2.set_ylabel('Average Importance')
-        ax2.legend()
-
-        plt.tight_layout()
-        plt.savefig(f"{fold_dir}/importance_trends.png", dpi=300,
-                    bbox_inches='tight')
-        plt.close()
-
-

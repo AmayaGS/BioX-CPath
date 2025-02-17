@@ -26,22 +26,19 @@ KRAG is a self-attention hierarchical graph multiple instance learning pipeline,
 ## Set Up
 
 ### General Requirements
-- Python 3.10.10
-- NVIDIA GPU with CUDA 12.1
+- Python 3.11.7
+- NVIDIA GPU with CUDA 12.5
 
-### Conda Environment
+### Virtual Environment
+To get started, first create a virtual environment and install the required packages:
 ```bash
-conda create -n krag python=3.10.10 -y
-conda activate krag
+python -m venv bioxcpath
+source bioxcpath/bin/activate
 
-# OpenSlide
-conda install -y -c conda-forge openslide openslide-python
+# PyTorch
+pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
 
-# PyTorch (Geometric)
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
-
-conda install -y matplotlib
+pip install -r requirements.txt
 ```
 
 ## Usage

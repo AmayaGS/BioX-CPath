@@ -6,6 +6,7 @@ from mains.main_embedding import patch_embedding
 from mains.main_rwpe import compute_rwpe
 from mains.main_train_test import train_model, test_model
 from mains.main_visualisation import visualise_results
+from utils.embedding_utils import seed_everything
 from utils.setup_utils import setup_results_and_logging, parse_dict
 from utils.model_utils import create_cross_validation_splits
 
@@ -60,20 +61,20 @@ parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'G
 parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
 parser.add_argument("--use_node_embedding", default=False, help="Add node embedding to the feature vectors")
 parser.add_argument("--use_edge_embedding", default=False, help="Add edge embedding to the GAT layer")
-parser.add_argument("--learning_rate", type=float, default=0.1, help="Learning rate")
+parser.add_argument("--learning_rate", type=float, default=0.0001, help="Learning rate")
 parser.add_argument('--use_attention', action='store_true', help='This parameter will result in using an attention mechanism after the graph pooling layer')
 parser.add_argument("--pooling_ratio", type=float, default=0.7, help="Pooling ratio")
-parser.add_argument("--heads", type=int, default=2, help="Number of GAT heads")
+parser.add_argument("--heads", type=int, default=4, help="Number of GAT heads")
 parser.add_argument("--dropout", type=float, default=0.5, help="Dropout rate")
 parser.add_argument("--num_epochs", type=int, default=2, help="Number of training epochs")
 parser.add_argument("--batch_size", type=int, default=1, help="Graph batch size for training")
 parser.add_argument("--scheduler", type=str, default=1, help="learning rate schedule")
 parser.add_argument("--checkpoint", action="store_true", default=True, help="Enables checkpointing of GNN weights.")
-parser.add_argument("--l1_norm", type=int, default=0, help="L1-norm to regularise loss function")
+parser.add_argument("--L2_norm", type=int, default=0.01, help="L2-norm to regularise loss function")
 parser.add_argument("--hard_test", type=bool, default=False, help="If called, will test on the hardest test set")
 
 # visualisation of heatmaps & graph layers
-parser.add_argument("--path_to_patches", type=str, default="/extracted_patches/patches", help="Location of patches")
+parser.add_argument("--path_to_patches", type=str, default=r"C:\Users\Amaya\Documents\PhD\Data\Test_Data_RA\extracted_patches_2\patches", help="Location of patches")
 parser.add_argument("--test_fold", type=int, default=0, help="Test fold to generate heatmaps for")
 parser.add_argument("--test_ids", nargs="+", help="Specific test IDs to generate heatmaps for")
 parser.add_argument("--specific_ids", action="store_true", help="Generate heatmaps for specific test IDs")
@@ -89,6 +90,7 @@ parser.add_argument("--embedding", action='store_true', help="Run feature vector
 parser.add_argument("--compute_rwpe", action='store_true', help="Run pre-compute of Random Walk positional encoding on the graph")
 parser.add_argument("--create_splits", action='store_true', help="Create train/val/test splits")
 parser.add_argument("--train", action='store_true', help="Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level")
+parser.add_argument("--val", action='store_true', help="Run validation")
 parser.add_argument("--test", action='store_true', help="Run testing")
 parser.add_argument("--visualise", action='store_true', help="Run heatmap & graph visualisation for WSI, for each layer of the GNN or all together.")
 parser.add_argument("--benchmark", action='store_true', help="Run benchmarking against other models")
@@ -96,6 +98,8 @@ parser.add_argument("--benchmark", action='store_true', help="Run benchmarking a
 args = parser.parse_args()
 
 def main(args):
+    
+    seed_everything(args.seed)
 
     # Run the preprocessing steps together in one go: tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.
     if args.preprocess:
@@ -184,6 +188,12 @@ def main(args):
         # Run self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level
         train_model(args, results_dir, train_logger)
         train_logger.info("Done training")
+
+    if args.val:
+        results_dir, test_logger = setup_results_and_logging(args, "_val")
+        test_logger.info("Running validation")
+        test_model(args, results_dir, test_logger)
+        test_logger.info("Done validation")
 
     if args.test:
         results_dir, test_logger = setup_results_and_logging(args, "_testing")
