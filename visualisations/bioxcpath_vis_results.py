@@ -8,12 +8,12 @@ from torch_geometric.utils import to_networkx
 import gc
 
 from mains.main_embedding import use_gpu
-from models.MUSTANG_heatmap_model import MUSTANG_Classifier_heatmap
+from models.BioXCPath_explainability import BioXCPath_explainable_model
 from .graph_metrics import GraphMetricGenerator
 from train_test_loops.krag_heatmap_loop import heatmap_scores
 
 
-class KRAGResultsGenerator:
+class VisualisationResultsGenerator:
     def __init__(self, args, results_dir, logger):
         self.args = args
         self.results_dir = results_dir
@@ -142,49 +142,6 @@ class KRAGResultsGenerator:
             'graphs': patient_graphs
         }
 
-    # def analyze_patient_relationships(self, patient_data, patient_id, fold_dir):
-    #     """
-    #     Add this method to your existing class to analyze stain relationships
-    #     """
-    #     analyzer = StainRelationshipAnalyzer(self.args)
-    #
-    #     # Analyze relationships across all layers
-    #     layer_analyses = analyzer.analyze_layer_relationships(patient_data, patient_id)
-    #
-    #     # Create visualizations for each layer
-    #     for layer_idx, layer_stats in layer_analyses.items():
-    #         # Visualize attention weights
-    #         analyzer.visualize_layer_relationships(
-    #             layer_stats,
-    #             layer_idx,
-    #             'mean_weight',
-    #             output_path=f'{fold_dir}/{patient_id}/patient_{patient_id}_attention'
-    #         )
-    #
-    #         # Analyze edge types
-    #         edge_type_analysis = analyzer.analyze_edge_types(layer_stats)
-    #         analyzer.visualize_layer_relationships(
-    #             layer_stats,
-    #             layer_idx,
-    #             'spatial_ratio',
-    #             output_path=f'{fold_dir}/{patient_id}/patient_{patient_id}_spatial_ratio'
-    #         )
-    #
-    #     return layer_analyses
-
-    # def analyze_dataset_relationships(self, all_patient_data, fold_dir):
-    #     """
-    #     Analyze relationships across all patients
-    #
-    #     Args:
-    #         all_patient_data: List of patient data dictionaries
-    #         fold_dir: Directory path for the current fold
-    #     """
-    #     analyzer = StainRelationshipAnalyzer(self.args)
-    #     analyzer._create_label_heatmaps(all_patient_data, fold_dir)
-    #     dataset_stats, avg_correlations = analyzer.analyze_dataset_relationships(all_patient_data, fold_dir, "all"
-    #     return dataset_stats, avg_correlations
-    #
     def _create_patient_graphs(self, layer_data, patient_id):
         patient_graphs = []
         for layer in layer_data[patient_id]:
@@ -221,13 +178,13 @@ class KRAGResultsGenerator:
         return G
 
     def _initialize_model(self, fold):
-        graph_net = MUSTANG_Classifier_heatmap(in_features=self.args.embedding_vector_size, edge_attr_dim=len(self.args.edge_types),
-                           node_attr_dim=len(self.args.stain_types), hidden_dim=self.args.hidden_dim,
-                           num_classes=self.args.n_classes, heads=self.args.heads, pooling_ratio=self.args.pooling_ratio,
-                           walk_length=self.args.encoding_size, conv_type=self.args.convolution,
-                           num_layers=self.args.num_layers, embedding_dim=10, dropout_rate=self.args.dropout,
-                           use_node_embedding=self.args.use_node_embedding, use_edge_embedding=self.args.use_edge_embedding,
-                           use_attention=self.args.use_attention)
+        graph_net = BioXCPath_explainable_model(in_features=self.args.embedding_vector_size, edge_attr_dim=len(self.args.edge_types),
+                                                node_attr_dim=len(self.args.stain_types), hidden_dim=self.args.hidden_dim,
+                                                num_classes=self.args.n_classes, heads=self.args.heads, pooling_ratio=self.args.pooling_ratio,
+                                                walk_length=self.args.encoding_size, conv_type=self.args.convolution,
+                                                num_layers=self.args.num_layers, embedding_dim=10, dropout_rate=self.args.dropout,
+                                                use_node_embedding=self.args.use_node_embedding, use_edge_embedding=self.args.use_edge_embedding,
+                                                use_attention=self.args.use_attention)
 
         checkpoints = os.path.join(self.results_dir, "checkpoints", "best_val_models")
         checkpoint = os.path.join(checkpoints, f"checkpoint_fold_{fold}_accuracy.pth")

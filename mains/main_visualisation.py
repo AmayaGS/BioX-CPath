@@ -1,7 +1,7 @@
 import os
 import pickle
 from utils.setup_utils import seed_everything
-from visualisations.krag_vis_results_generator import KRAGResultsGenerator
+from visualisations.bioxcpath_vis_results import VisualisationResultsGenerator
 from visualisations.metrics_visualiser import MetricsVisualiser
 from visualisations.stain_relationship import StainRelationship
 from visualisations.heatmap_generator import HeatmapGenerator
@@ -46,14 +46,14 @@ def visualise_results(args, results_dir, logger):
         os.makedirs(fold_dir, exist_ok=True)
 
         # Generate visualization data
-        vis_results_generator = KRAGResultsGenerator(args, results_dir, logger)
+        vis_results_generator = VisualisationResultsGenerator(args, results_dir, logger)
         all_metrics, all_patient_data = vis_results_generator.process_fold(fold, fold_data[1]['Test']) # all the metrics are being generated here
 
         # Generate visualizations for this fold
         if all_metrics:
-            #graph_visualiser.visualise_graphs(all_patient_data, fold_dir, fold)
-            #heatmap_generator.generate_heatmaps(all_patient_data, fold_dir, fold)
-            #metrics_visualiser.plot_metrics(args, all_metrics, fold_dir)
+            graph_visualiser.visualise_graphs(all_patient_data, fold_dir, fold)
+            heatmap_generator.generate_heatmaps(all_patient_data, fold_dir, fold)
+            metrics_visualiser.plot_metrics(args, all_metrics, fold_dir)
             stain_relationship.plot_stain_relationships(all_patient_data, fold_dir, 'all')
             logger.info(f"Successfully generated visualizations for fold {fold}")
 

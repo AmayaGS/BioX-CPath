@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description="Input arguments for applying KRAG 
 # Input arguments for tissue segmentation and patching of Whole Slide Images
 parser.add_argument('--input_directory', type=str, default= r"C:/Users/Amaya/Documents/PhD/Data/Test_Data_RA/R4RA_slides", help='Input data directory')
 parser.add_argument('--directory', type=str, default= r"C:/Users/Amaya/Documents/PhD/Data/Test_data_RA", help='Location of patient label df and extracted patches df. Embeddings and graphs dictionaries will be kept here')
-parser.add_argument('--dataset_name', type=str, default='RA', choices=['RA', 'NSCLC', 'CAMELYON16', 'CAMELYON17', 'Sjogren'], help="Dataset name")
+parser.add_argument('--dataset_name', type=str, default='RA', choices=['RA', 'Sjogren'], help="Dataset name")
 parser.add_argument('--patch_size', type=int, default=224, help='Patch size (default: 224)')
 parser.add_argument('--overlap', type=int, default=0, help='Overlap (default: 0)')
 parser.add_argument('--coverage', type=float, default=0.4, help='Coverage (default: 0.3)')
@@ -57,7 +57,7 @@ parser.add_argument("--encoding_size", type=int, default=20, help="Size Random W
 
 #self-attention graph multiple instance learning for Whole Slide Image set classification at the patient level"
 parser.add_argument("--hidden_dim", type=int, default=512, help="Size of hidden network dimension")
-parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT', 'GCN', 'GIN', 'GraphSAGE'], help="Change type of graph convolution used")
+parser.add_argument("--convolution", type=str, default="GAT", choices=['GAT'], help="Change type of graph convolution used")
 parser.add_argument("--positional_encoding", default=True, help="Add Random Walk positional encoding to the graph")
 parser.add_argument("--use_node_embedding", default=False, help="Add node embedding to the feature vectors")
 parser.add_argument("--use_edge_embedding", default=False, help="Add edge embedding to the GAT layer")
@@ -81,7 +81,7 @@ parser.add_argument("--specific_ids", action="store_true", help="Generate heatma
 parser.add_argument("--per_layer", action='store_true', help="If called, will create heatmaps for each layer of the GNN.")
 
 # benchmarking against other models
-parser.add_argument("--model_name", type=str, default='KRAG', choices=['KRAG', 'MUSTANG', 'CLAM', 'DeepGraphConv', 'PatchGCN', 'TransMIL', 'GTP', 'HEAT', 'CAMIL'])
+parser.add_argument("--model_name", type=str, default='KRAG', choices=['BioXCPath', 'MUSTANG', 'CLAM', 'DeepGraphConv', 'PatchGCN', 'TransMIL', 'GTP', 'HEAT', 'CAMIL'])
 
 # General arguments to determine if running preprocessing, training, testing, visualisation or benchmarking.
 parser.add_argument("--preprocess", action='store_true', help="Run tissue segmentation, patching of WSI, embed feature vectors, graph creation & compute RWPE.")

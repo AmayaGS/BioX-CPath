@@ -14,8 +14,8 @@ from torch import Tensor
 # PyG
 from torch_geometric.utils import scatter
 
-from models.KRAG_model import KRAG_Classifier
 from models.MUSTANG_model import MUSTANG_Classifier
+from models.BioXCPath_model import BioXCPath_Classifier
 from models.DeepGraphConv_model import DeepGraphConv
 from models.patchGCN_model import PatchGCN
 from models.GTP_model import GTP_Classifier
@@ -24,13 +24,20 @@ from models.CLAM_model import GatedAttention as CLAM
 
 
 MODEL_CONFIGS = {
-    'KRAG': {
-        'model_class': KRAG_Classifier,
+    'BioXCPath': {
+        'model_class': BioXCPath_Classifier,
         'use_args': True
     },
     'MUSTANG': {
         'model_class': MUSTANG_Classifier,
-        'use_args': True
+        'graph_mode': 'knn',
+        'convolution': 'GAT',
+        'encoding_size': 0,
+        'heads': 2,
+        'pooling_ratio': 0.7,
+        'use_attention': False,
+        'dropout': 0,
+        'use_args': False
     },
     'CLAM': {
         'graph_mode': 'embedding',
@@ -93,7 +100,7 @@ MODEL_CONFIGS = {
 def get_model_config(args):
     config = MODEL_CONFIGS[args.model_name].copy()
     if config['use_args']:
-        # For KRAG, use the args directly
+        # For BioXCPath, use the args directly
         config['graph_mode'] = args.graph_mode
         config['convolution'] = args.convolution
         config['encoding_size'] = args.encoding_size

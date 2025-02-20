@@ -17,8 +17,8 @@ import torch.optim as optim
 from utils.setup_utils import get_model_config
 from utils.plotting_functions_utils import plot_average_roc_curve, plot_average_pr_curve
 
-from models.KRAG_model import KRAG_Classifier
 from models.MUSTANG_model import MUSTANG_Classifier
+from models.BioXCPath_model import BioXCPath_Classifier
 from models.patchGCN_model import PatchGCN
 from models.DeepGraphConv_model import DeepGraphConv
 from models.GTP_model import GTP_Classifier
@@ -27,14 +27,14 @@ from models.CLAM_model import GatedAttention as CLAM
 
 
 def process_model_output(args, output, loss_fn):
-    if args.model_name == 'KRAG':
-        logits, Y_prob, label = output
+    if args.model_name == 'BioXCPath':
+        logits, Y_prob, layer_attention, label = output
         Y_hat = torch.argmax(Y_prob, dim=1)
         loss = loss_fn(logits, label)
         return logits, Y_prob, Y_hat, loss
 
     elif args.model_name == 'MUSTANG':
-        logits, Y_prob, layer_attention, label = output
+        logits, Y_prob, label = output
         Y_hat = torch.argmax(Y_prob, dim=1)
         loss = loss_fn(logits, label)
         return logits, Y_prob, Y_hat, loss
@@ -72,18 +72,6 @@ def process_model_output(args, output, loss_fn):
         loss = loss_fn(logits, label)
         total_loss = loss + results_dir['mc1'] + results_dir['o1']
         return logits, Y_prob, Y_hat, total_loss
-
-    elif args.model_name == 'HEAT':
-        logits, Y_prob, results_dir, label = output
-        Y_hat = torch.argmax(Y_prob, dim=1)
-        loss = loss_fn(logits, label)
-        return logits, Y_prob, Y_hat, loss
-
-    elif args.model_name == 'CAMIL':
-        logits, Y_prob, results_dir, label = output
-        Y_hat = torch.argmax(Y_prob, dim=1)
-        loss = loss_fn(logits, label)
-        return logits, Y_prob, Y_hat, loss
 
     else:
 
@@ -236,22 +224,17 @@ def prepare_data_loaders(data_dict, sss_folds):
     return training_folds, validation_folds, testing_folds
 
 def initialise_model(args):
-    if args.model_name == 'KRAG':
-        model = KRAG_Classifier(in_features=args.embedding_vector_size,
-                                hidden_dim=args.hidden_dim,
-                                num_classes=args.n_classes,
-                                heads=args.heads,
-                                pooling_ratio=args.pooling_ratio,
-                                walk_length=args.encoding_size,
-                                conv_type=args.convolution,
-                                num_layers=args.num_layers)
+    if args.model_name == 'BioXCPath':
+        model = BioXCPath_Classifier(in_features=args.embedding_vector_size, edge_attr_dim=len(args.edge_types),
+                                     node_attr_dim=len(args.stain_types), hidden_dim=args.hidden_dim,
+                                     num_classes=args.n_classes, heads=args.heads, pooling_ratio=args.pooling_ratio,
+                                     walk_length=args.encoding_size, conv_type=args.convolution,
+                                     num_layers=args.num_layers, embedding_dim=10, dropout_rate=args.dropout,
+                                     use_node_embedding=args.use_node_embedding, use_edge_embedding=args.use_edge_embedding, use_attention=args.use_attention)
     elif args.model_name == 'MUSTANG':
-        model = MUSTANG_Classifier(in_features=args.embedding_vector_size, edge_attr_dim=len(args.edge_types),
-                                   node_attr_dim=len(args.stain_types), hidden_dim=args.hidden_dim,
-                                   num_classes=args.n_classes, heads=args.heads, pooling_ratio=args.pooling_ratio,
-                                   walk_length=args.encoding_size, conv_type=args.convolution,
-                                   num_layers=args.num_layers, embedding_dim=10, dropout_rate=args.dropout,
-                                   use_node_embedding=args.use_node_embedding, use_edge_embedding=args.use_edge_embedding, use_attention=args.use_attention)
+        model = MUSTANG_Classifier(in_features=args.embedding_vector_size,
+                                   heads=args.heads,
+                                   pooling_ratio=args.pooling_ratio)
     elif args.model_name == 'CLAM':
         model = CLAM(args.embedding_vector_size)
     elif args.model_name == 'DeepGraphConv':

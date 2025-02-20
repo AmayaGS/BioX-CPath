@@ -1,6 +1,6 @@
 import torch
 import argparse
-from models.KRAG_model import KRAG_Classifier
+from models.MUSTANG_model import MUSTANG_Classifier
 from model_stats_utils import print_model_stats
 from torch_geometric.data import Data, Batch
 
@@ -29,7 +29,7 @@ def main(args):
                                      args.encoding_size)
 
     # Initialize the model
-    model = KRAG_Classifier(
+    model = MUSTANG_Classifier(
         in_features=args.embedding_vector_size,
         hidden_dim=args.hidden_dim,
         num_classes=args.n_classes,
