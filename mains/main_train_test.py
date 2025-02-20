@@ -15,10 +15,9 @@ from torch_geometric.loader import DataLoader
 # KRAG functions
 from train_test_loops.krag_train_val_loop import train_val_loop
 from train_test_loops.krag_test_loop import test_loop, ensemble_test_results
-from utils.setup_utils import seed_everything
 from utils.profiling_utils import train_profiler, test_profiler
 from utils.model_utils import load_data, minority_sampler, prepare_data_loaders, initialise_model
-from utils.model_utils import summarise_train_results, summarise_val_results, summarise_test_results
+from utils.model_utils import summarise_train_results, summarise_val_results
 from utils.plotting_functions_utils import plot_roc_curve
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -27,7 +26,6 @@ use_gpu = torch.cuda.is_available()
 
 
 def train_model(args, results_dir, logger):
-    seed_everything(args.seed)
     os.makedirs(results_dir, exist_ok=True)
 
     run_settings, checkpoints, data_dict, sss_folds = load_data(args, results_dir)

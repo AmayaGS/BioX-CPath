@@ -1,6 +1,5 @@
 import os
 import pickle
-from utils.setup_utils import seed_everything
 from visualisations.bioxcpath_vis_results import VisualisationResultsGenerator
 from visualisations.metrics_visualiser import MetricsVisualiser
 from visualisations.stain_relationship import StainRelationship
@@ -17,7 +16,6 @@ def visualise_results(args, results_dir, logger):
         results_dir: Base directory for results
         logger: Logger instance
     """
-    seed_everything(args.seed)
 
     # Load splits if no specific test fold is provided
     if not args.specific_ids and not args.test_fold:

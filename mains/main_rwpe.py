@@ -14,9 +14,6 @@ import torch
 # torch geometric
 import torch_geometric.transforms as T
 
-# MUSTANG functions
-from utils.setup_utils import seed_everything
-
 use_gpu = torch.cuda.is_available()
 
 import gc
@@ -44,8 +41,6 @@ def add_pe_to_graph(loader, walk_length):
 
 
 def compute_rwpe(args, logger):
-
-    seed_everything(args.seed)
 
     # load pickled graphs
     with open(args.directory + f"/dictionaries/{args.graph_mode}_dict_{args.dataset_name}_{args.embedding_net}_{args.stain_type}.pkl", "rb") as file:
