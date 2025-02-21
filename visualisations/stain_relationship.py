@@ -116,23 +116,17 @@ class StainRelationship:
 
         # Collect weights and edge types for each stain pair
         for u, v, edge_data in G.edges(data=True):
-            # Get original node indices
-            original_u = layer_data.node_mapping[u]
-            original_v = layer_data.node_mapping[v]
 
             # Get stain types
-            source_stain = layer_data.node_attr[original_u].item()
-            target_stain = layer_data.node_attr[original_v].item()
+            source_stain = G.nodes[u]['stain_type']
+            target_stain = G.nodes[v]['stain_type']
 
             # Get edge weight
-            original_edge = str([original_u, original_v])
-            original_edge_index = layer_data.edge_mapping[original_edge]
-            attention_idx = layer_data.edge_idx_mapping[original_edge_index]
             weight = edge_data['weight']
 
             # Get edge type if available
-            edge_type = (layer_data.original_edge_attr[original_edge_index].item()
-                         if hasattr(layer_data, 'original_edge_attr') else None)
+            edge_type = (edge_data['edge_attribute']
+                         if hasattr(edge_data, 'edge_attribute') else None)
 
             # Store data
             stain_pair = tuple(sorted([source_stain, target_stain]))
@@ -163,6 +157,66 @@ class StainRelationship:
             stats.append(stat)
 
         return stats
+
+
+    # def _calculate_layer_statistics(self, patient_data, G, layer_data, layer_idx):
+    #     """
+    #     Calculate statistics for a single layer
+    #     """
+    #     stats = []
+    #     stain_pair_weights = defaultdict(list)
+    #     stain_pair_edge_types = defaultdict(list)
+    #
+    #     # Collect weights and edge types for each stain pair
+    #     for u, v, edge_data in G.edges(data=True):
+    #         # Get original node indices
+    #         original_u = layer_data.node_mapping[u]
+    #         original_v = layer_data.node_mapping[v]
+    #
+    #         # Get stain types
+    #         source_stain = layer_data.node_attr[original_u].item()
+    #         target_stain = layer_data.node_attr[original_v].item()
+    #
+    #         # Get edge weight
+    #         original_edge = str([original_u, original_v])
+    #         original_edge_index = layer_data.edge_mapping[original_edge]
+    #         attention_idx = layer_data.edge_idx_mapping[original_edge_index]
+    #         weight = edge_data['weight']
+    #
+    #         # Get edge type if available
+    #         edge_type = (layer_data.original_edge_attr[original_edge_index].item()
+    #                      if hasattr(layer_data, 'original_edge_attr') else None)
+    #
+    #         # Store data
+    #         stain_pair = tuple(sorted([source_stain, target_stain]))
+    #         stain_pair_weights[stain_pair].append(weight)
+    #         if edge_type is not None:
+    #             stain_pair_edge_types[stain_pair].append(edge_type)
+    #
+    #     # Calculate statistics for each stain pair
+    #     for stain_pair, weights in stain_pair_weights.items():
+    #         weights_array = np.array(weights)
+    #         edge_types = stain_pair_edge_types.get(stain_pair, [])
+    #
+    #         stat = {
+    #             'layer': layer_idx,
+    #             'label': patient_data['actual_label'],
+    #             'predicted_label': patient_data['predicted_label'],
+    #             'stain_1': self.stain_names[stain_pair[0]],
+    #             'stain_2': self.stain_names[stain_pair[1]],
+    #             'mean_weight': np.mean(weights_array),
+    #             'median_weight': np.median(weights_array),
+    #             'std_weight': np.std(weights_array),
+    #             'max_weight': np.max(weights_array),
+    #             'min_weight': np.min(weights_array),
+    #             'connection_count': len(weights),
+    #             'spatial_connections': sum(1 for et in edge_types if et == 0),
+    #             'feature_connections': sum(1 for et in edge_types if et == 1)
+    #         }
+    #         stats.append(stat)
+    #
+    #     return stats
+
 
     def _plot_layer_visualizations(self, stats_df, layer_idx, patient_id, fold_dir):
         """
