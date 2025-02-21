@@ -31,7 +31,7 @@ class MUSTANG_Classifier(torch.nn.Module):
         self.lin3 = torch.nn.Linear(512 // 2, 2)
 
 
-    def forward(self, data):
+    def forward(self, data, label):
 
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
@@ -65,7 +65,7 @@ class MUSTANG_Classifier(torch.nn.Module):
         x_logits = self.lin3(x)
         x_out = F.softmax(x_logits, dim=1)
 
-        return x_logits, x_out
+        return x_logits, x_out, label
 
 
 

@@ -1,0 +1,136 @@
+# Paths
+paths:
+  input_directory: "C:/Users/Amaya/Documents/PhD/Data/IHC Foundation Model/WSIs" # Histopathology Slide location - unprocessed.
+  output_directory: "C:/Users/Amaya/Documents/PhD/Data/IHC Foundation Model"
+  embedding_weights: "C:/Users/Amaya/Documents/PhD/Data/WSI_foundation/"
+  path_to_patches: "C:/Users/Amaya/Documents/PhD/Data/Test_Data_RA/extracted_patches_2/patches"
+  unet_weights: "C:/Users/Amaya/Documents/PhD/Data/UNet_512_1.pth.tar"
+
+# Dataset configurations
+dataset:
+  name: "RA"  # choices: ['RA', 'Sjogren']
+  patch_size: 224
+  overlap: 0
+  coverage: 0.4 # percent of tissue coverage in the patch
+  slide_level: 1
+  mask_level: 2
+  patch_batch_size: 10
+  train_fraction: 0.8
+  val_fraction: 0.20
+  stain_used: 'all' # RA choices: ['all', 'H&E', 'CD68', 'CD138', 'CD20']
+
+# Parsing configurations
+parsing:
+  patient_ID: 'img.split("_")[0]' # "Patient123_stain.tiff" -> Patient123
+  stain: 'img.split("_")[1]' # "Patient123_stain.tiff" -> stain
+  stain_types: {'NA': 0, 'H&E': 1, 'CD68': 2, 'CD138': 3, 'CD20': 4} # RA stain types
+
+
+# Label/split configurations
+labels:
+  label: 'label'
+  label_dict: {'0': 'Pauci-Immune', '1': 'Lymphoid/Myeloid'}
+  n_classes: 2
+  patient_id: 'Patient_ID'
+
+training:
+  hidden_dim: 128
+  learning_rate: 0.00001
+  num_epochs: 5
+  L2_norm: 0.00001
+  batch_size: 1
+  slide_batch: 1
+  num_workers: 0
+  scheduler: 1
+  checkpoint: true
+  seed: 42
+  attention_heads: 1
+  stratified_splits: 5
+
+model:
+  name: 'ABMIL'
+
+# Execution flags
+execution:
+  preprocess: false
+  segmentation: false
+  embedding: false
+  create_splits: false
+  train: false
+  test: false
+  visualise: false
+
+# Embedding models configs & paths
+embedding_nets:
+  # ImageNet pre-trained models
+  vgg16:
+    size: 4096
+    weight_path: ""
+    class: "VGG_embedding"
+  resnet18:
+    size: 512
+    weight_path: ""
+    class: "ResNet18_embedding"
+  resnet50:
+    size: 2048
+    weight_path: ""
+    class: "ResNet50_embedding"
+  convnext:
+    size: 1024
+    weight_path: ""
+    class: "ConvNext_embedding"
+  ViT:
+    size: 768
+    weight_path: ""
+    class: "ViT_embedding"
+  # Foundation Models - Public data
+  ssl_resnet18:
+    size: 512
+    weight_path: "Ciga/tenpercent_resnet18.pt"
+    class: "ssl_resnet18_embedding"
+  ssl_resnet50:
+    size: 2048
+    weight_path: ""
+    class: "ssl_resnet50_embedding"
+  CTransPath:
+    size: 768
+    weight_path: "CTransPath/ctranspath.pth"
+    class: "CTransPath_embedding"
+  Lunit:
+    size: 384
+    weight_path: ""
+    class: "Lunit_embedding"
+  GigaPath:
+    size: 1536
+    weight_path: ""
+    class: "GigaPath_embedding"
+  Phikon:
+    size: 1024
+    weight_path: ""
+    class: "Phikon_embedding"
+  # Foundation Models - Private data
+  BiOptimus:
+    size: 1536
+    weight_path: ""
+    class: "BiOptimus_embedding"
+  UNI:
+    size: 1024
+    weight_path: ""
+    class: "UNI_embedding"
+
+# Mapping of class names to module paths
+embedding_classes:
+  VGG_embedding: "models.embedding_models.VGG_embedding"
+  ResNet18_embedding: "models.embedding_models.ResNet18_embedding"
+  ResNet50_embedding: "models.embedding_models.ResNet50_embedding"
+  ConvNext_embedding: "models.embedding_models.ConvNext_embedding"
+  ViT_embedding: "models.embedding_models.ViT_embedding"
+  ssl_resnet18_embedding: "models.embedding_models.ssl_resnet18_embedding"
+  ssl_resnet50_embedding: "models.embedding_models.ssl_resnet50_embedding"
+  CTransPath_embedding: "models.embedding_models.CTransPath_embedding"
+  Lunit_embedding: "models.embedding_models.Lunit_embedding"
+  GigaPath_embedding: "models.embedding_models.GigaPath_embedding"
+  Phikon_embedding: "models.embedding_models.Phikon_embedding"
+  BiOptimus_embedding: "models.embedding_models.BiOptimus_embedding"
+  UNI_embedding: "models.embedding_models.UNI_embedding"
+

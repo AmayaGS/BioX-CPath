@@ -2,13 +2,11 @@
 import os
 import logging
 import argparse
+import yaml
 import ast
-import random
-import numpy as np
 
 # PyTorch
 import torch
-from torch.utils.data import Dataset
 from torch import Tensor
 
 # PyG
@@ -96,6 +94,9 @@ MODEL_CONFIGS = {
     }
 }
 
+def load_config(config_path):
+    with open(config_path, 'r') as file:
+        return yaml.safe_load(file)
 
 def get_model_config(args):
     config = MODEL_CONFIGS[args.model_name].copy()

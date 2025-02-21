@@ -232,9 +232,7 @@ def initialise_model(args):
                                      num_layers=args.num_layers, embedding_dim=10, dropout_rate=args.dropout,
                                      use_node_embedding=args.use_node_embedding, use_edge_embedding=args.use_edge_embedding, use_attention=args.use_attention)
     elif args.model_name == 'MUSTANG':
-        model = MUSTANG_Classifier(in_features=args.embedding_vector_size,
-                                   heads=args.heads,
-                                   pooling_ratio=args.pooling_ratio)
+        model = MUSTANG_Classifier(in_features=args.embedding_vector_size)
     elif args.model_name == 'CLAM':
         model = CLAM(args.embedding_vector_size)
     elif args.model_name == 'DeepGraphConv':

@@ -54,8 +54,8 @@ class BioXCPath_Classifier(nn.Module):
 
         self.use_attention = use_attention
 
-        self.mustang = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
-                                         walk_length, conv_type, num_layers, embedding_dim, use_node_embedding, use_edge_embedding)
+        self.bioxcpath_pooling = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
+                                                   walk_length, conv_type, num_layers, embedding_dim, use_node_embedding, use_edge_embedding)
 
         concat_dim = hidden_dim * 2 * num_layers
         self.layer_attention = LayerConcatSelfAttention(hidden_dim * 2, num_layers, num_heads=1, dropout_rate=dropout_rate)
@@ -65,7 +65,7 @@ class BioXCPath_Classifier(nn.Module):
         self.classifier2 = nn.Linear(concat_dim // 2, num_classes)
 
     def forward(self, data, label):
-        x = self.mustang(data)  # x shape: (1, num_layers * hidden_dim * 2)
+        x = self.bioxcpath_pooling(data)  # x shape: (1, num_layers * hidden_dim * 2)
 
         if self.use_attention:
             # Apply self-attention
@@ -155,6 +155,7 @@ class bioxcpath_pooling(torch.nn.Module):
 
             x, edge_index, edge_attr_embedded, batch, perm, attention_scores = self.pooling_layers[i](x, edge_index, edge_attr_embedded, batch)
 
+            # SAAPooling
             stain_scores = defaultdict(list)
             for node, score in enumerate(attention_scores):
                 stain = data.node_attr[perm][node].item()
