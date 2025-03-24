@@ -3,8 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.nn import SAGPooling
 from torch_geometric.data import Data
+
+from models.sag_pool_biox import SAGPooling
 
 class LayerConcatSelfAttention(nn.Module):
     def __init__(self, embedding_dim, num_layers, num_heads, dropout_rate):
@@ -56,9 +57,9 @@ class BioXCPath_explainable_model(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.use_attention = use_attention
 
-        self.mustang = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
-                                         walk_length, conv_type, num_layers, embedding_dim, use_node_embedding,
-                                         use_edge_embedding)
+        self.bioxcpath = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
+                                           walk_length, conv_type, num_layers, embedding_dim, use_node_embedding,
+                                           use_edge_embedding)
 
         concat_dim = hidden_dim * 2 * num_layers
         self.layer_attention = LayerConcatSelfAttention(hidden_dim * 2, num_layers, num_heads=1,
@@ -70,7 +71,7 @@ class BioXCPath_explainable_model(nn.Module):
 
     def forward(self, data, filenames):
         data = data.to(self.device)
-        x, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data, stain_attention, entropy_scores = self.mustang(data, filenames)  # x shape: (1, num_layers * hidden_dim * 2)
+        x, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data, stain_attention, entropy_scores, stain_z_scores = self.bioxcpath(data, filenames)  # x shape: (1, num_layers * hidden_dim * 2)
 
         if self.use_attention:
             # Apply self-attention
@@ -86,7 +87,7 @@ class BioXCPath_explainable_model(nn.Module):
         logits = self.classifier2(x)
         Y_prob = F.softmax(logits, dim=-1)
 
-        return logits, Y_prob, layer_attention, stain_attention, entropy_scores, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data
+        return logits, Y_prob, layer_attention, stain_attention, stain_z_scores, entropy_scores, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data
 
 class bioxcpath_pooling(torch.nn.Module):
     def __init__(self, in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio, walk_length,
@@ -161,6 +162,7 @@ class bioxcpath_pooling(torch.nn.Module):
         layer_embeddings = [] # layerwise feature embeddings here
         stain_attention = [] # keep stain attention scores here
         entropy_per_layer = []
+        stain_z_per_layer = []
 
         for i in range (self.num_layers):
             if self.walk_length > 0:
@@ -180,7 +182,7 @@ class bioxcpath_pooling(torch.nn.Module):
                 x, (edge_index_gat, att_weights_gat) = self.convolutions[i](x, edge_index, return_attention_weights=True)
                 x = F.relu(x)
 
-            x, edge_index, edge_attr, batch, perm, attention_scores = self.pooling_layers[i](x, edge_index, edge_attr, batch)
+            x, edge_index, edge_attr, batch, perm, attention_scores, node_scores = self.pooling_layers[i](x, edge_index, edge_attr, batch)
             att_weights = self.filter_edges(edge_index_gat, att_weights_gat, perm)
 
             node_idx_mapping, filenames, edge_idx_mapping, edge_old_idx_new_idx = self.update_node_mapping(node_idx_mapping, perm, original_filenames,
@@ -189,8 +191,12 @@ class bioxcpath_pooling(torch.nn.Module):
                                           original_node_attr, att_weights, filenames, node_idx_mapping,
                                           edge_index_mapping_rev, edge_old_idx_new_idx, original_edge_attr)
 
-            layer_embeddings, normalized_stain_scores, entropy_scores = self.stain_attention_pooling(x, data, perm, attention_scores,
-                                                                                     node_idx_mapping, layer_embeddings)
+            layer_embeddings, normalized_stain_scores, entropy_scores, stain_z_scores = self.stain_attention_pooling(x,
+                                                                                                                     data,
+                                                                                                                     attention_scores,
+                                                                                                                     node_scores,
+                                                                                                                     node_idx_mapping,
+                                                                                                                     layer_embeddings)
             attention_scores_per_layer[i] = self.update_attention_scores(attention_scores_per_layer[i], perm, attention_scores,
                                                                          node_idx_mapping)
             cumulative_attention_scores = self.update_cumulative_scores(cumulative_attention_scores, perm, attention_scores,
@@ -199,14 +205,14 @@ class bioxcpath_pooling(torch.nn.Module):
 
             stain_attention.append(normalized_stain_scores)
             entropy_per_layer.append(entropy_scores)
+            stain_z_per_layer.append(stain_z_scores)
 
             if self.walk_length > 0:
                 random_walk_pe = random_walk_pe[perm]
             if self.use_node_embedding:
                 node_attr_embedded = node_attr_embedded[perm]
 
-        normalized_attention_scores_per_layer = [self.normalize_attention_scores(scores) for scores in
-                                                 attention_scores_per_layer]
+        normalized_attention_scores_per_layer = [self.normalize_attention_scores(scores) for scores in attention_scores_per_layer]
         normalized_cumulative_scores = self.normalize_attention_scores(cumulative_attention_scores)
         normalized_attention_scores = self.normalize_attention_scores(replace_attention_scores)
 
@@ -214,14 +220,12 @@ class bioxcpath_pooling(torch.nn.Module):
             [(filename, score) for filename, score in zip(original_filenames, layer_scores)]
             for layer_scores in normalized_attention_scores_per_layer
         ]
-        all_patches_cumulative = list(zip(original_filenames,
-                                          normalized_cumulative_scores))
-        all_patches_replace = list(zip(original_filenames,
-                                          normalized_attention_scores))
+        all_patches_cumulative = list(zip(original_filenames, normalized_cumulative_scores))
+        all_patches_replace = list(zip(original_filenames, normalized_attention_scores))
 
         x = torch.cat(layer_embeddings, dim=0).unsqueeze(0)
 
-        return x, all_patches_per_layer, all_patches_cumulative, all_patches_replace, layer_data, stain_attention, entropy_per_layer
+        return x, all_patches_per_layer, all_patches_cumulative, all_patches_replace, layer_data, stain_attention, entropy_per_layer, stain_z_per_layer
 
 
     def filter_edges(self, edge_index, edge_attr, perm):
@@ -250,10 +254,10 @@ class bioxcpath_pooling(torch.nn.Module):
         new_node_mapping = {}
         new_filenames = []
         for new_idx, old_idx in enumerate(perm.tolist()):
-            if old_idx in node_mapping:
-                original_idx = node_mapping[old_idx]
-                new_node_mapping[new_idx] = original_idx
-                new_filenames.append(original_filenames[original_idx])
+        #if old_idx in node_mapping:
+            original_idx = node_mapping[old_idx]
+            new_node_mapping[new_idx] = original_idx
+            new_filenames.append(original_filenames[original_idx])
 
         new_edge_index_mapping = {}
         old_idx_to_new_idx = {}
@@ -261,9 +265,9 @@ class bioxcpath_pooling(torch.nn.Module):
             new_edge_name = edge_index.t()[i].tolist()
             source, target = new_edge_name
             original_edge_name = str([new_node_mapping[source], new_node_mapping[target]])
-            old_idx = edge_index_mapping_rev[original_edge_name]
-            new_edge_index_mapping[str(new_edge_name)] = old_idx
-            old_idx_to_new_idx[old_idx] = i
+            old_edge_idx = edge_index_mapping_rev[original_edge_name]
+            new_edge_index_mapping[str(new_edge_name)] = old_edge_idx
+            old_idx_to_new_idx[old_edge_idx] = i
 
         return new_node_mapping, new_filenames, new_edge_index_mapping, old_idx_to_new_idx
 
@@ -273,71 +277,92 @@ class bioxcpath_pooling(torch.nn.Module):
         if not valid_scores:
             return scores  # Return the original list if all layer_data are None
 
-        # Perform min-max normalization on valid layer_data
         min_score = min(valid_scores)
         max_score = max(valid_scores)
+        # Perform min-max normalization on valid layer_data to get a 0-1 range respecting relative importance
         if max_score > min_score:
-            normalized_scores = [(s - min_score) / (max_score - min_score) if s is not None else 0 for s in scores]
+            normalized_scores_scaled = [(s - min_score) / (max_score - min_score) + 0.5 if s is not None else 0 for s in scores]
         else:
-            normalized_scores = [1 if s is not None else 0 for s in scores]
+            normalized_scores_scaled = [0.5 if s is not None else 0 for s in scores]
 
-        return normalized_scores
+        return normalized_scores_scaled
 
     def update_attention_scores(self, attention_scores, perm, score, node_mapping):
         new_attention_scores = [None] * len(attention_scores)
         for new_idx, old_idx in enumerate(perm.tolist()):
-            if old_idx in node_mapping:
-                new_attention_scores[node_mapping[old_idx]] = score[new_idx].item()
+            #if old_idx in node_mapping:
+            new_attention_scores[node_mapping[new_idx]] = score[new_idx].item()
         return new_attention_scores
 
-    def update_cumulative_scores(self, cumulative_scores, perm, score, node_mapping): # this is wrong
+    def update_cumulative_scores(self, cumulative_scores, perm, score, node_mapping):
         new_cumulative_scores = cumulative_scores.copy()
         for new_idx, old_idx in enumerate(perm.tolist()):
-            if old_idx in node_mapping:
-                if new_cumulative_scores[node_mapping[old_idx]] is None:
-                    new_cumulative_scores[node_mapping[old_idx]] = score[new_idx].item()
-                else:
-                    new_cumulative_scores[node_mapping[old_idx]] += score[new_idx].item()
+            #if old_idx in node_mapping:
+            if new_cumulative_scores[old_idx] is None:
+                new_cumulative_scores[node_mapping[new_idx]] = score[new_idx].item()
+            else:
+                new_cumulative_scores[node_mapping[new_idx]] += score[new_idx].item()
         return new_cumulative_scores
 
-    def replace_attention_score(self, replace_attention_scores, perm, score, node_mapping): # this is wrong
+    def replace_attention_score(self, replace_attention_scores, perm, score, node_mapping):
         new_attention_scores = replace_attention_scores.copy()
         for new_idx, old_idx in enumerate(perm.tolist()):
-            if old_idx in node_mapping:
-                new_attention_scores[node_mapping[old_idx]] = score[new_idx].item()
+            #if old_idx in node_mapping:
+            new_attention_scores[node_mapping[new_idx]] = score[new_idx].item()
         return new_attention_scores
 
-    def stain_attention_pooling(self, x, data, perm, attention_scores, node_idx_mapping, layer_embeddings):
+    def stain_attention_pooling(self, x, data, attention_scores, node_scores, node_idx_mapping, layer_embeddings):
 
-        # Normalize attention scores globally
-        attention_scores = attention_scores - attention_scores.min()
-        attention_scores = attention_scores + 1e-8
-        attention_scores = attention_scores / attention_scores.sum()
+        # 1. Global min shift for attention scores
+        global_min = node_scores.min().item()
+        shift_value = 1.0  # Add a minimum shift of 1.0 for numerical stability
+        shifted_attention = node_scores - global_min + shift_value
+        shifted_normalized_attn = shifted_attention / shifted_attention.sum()  # prob distribution for entropy calc
 
+        # 2. Calculate global entropy
         entropy_scores = defaultdict(list)
-        global_entropy_measure = -1 * (attention_scores * torch.log(attention_scores)).sum().item()
+        global_entropy_measure = -1 * (shifted_normalized_attn * torch.log(shifted_normalized_attn + 1e-10)).sum().item()
         entropy_scores['global'].append(global_entropy_measure)
 
-        # Weight node features by their attention scores to capture node importance
-        weighted_features = x * attention_scores.unsqueeze(-1)
-
-        # Calculate stain-level weights from attention scores
+        # 3. Calculate stain-level weights from attention scores
         stain_scores = defaultdict(list)
         for node, score in enumerate(attention_scores):
             stain = data.node_attr[node_idx_mapping[node]].item()
             stain_scores[stain].append(score)
 
-        stain_weights = {stain: torch.tensor(scores).sum() for stain, scores in stain_scores.items()}
+        #stain_weights = {stain: torch.tensor(scores).sum() for stain, scores in stain_scores.items()}
 
+        ## Total proportion of attention per stain for weight calculation
+        total_attention = attention_scores.sum()
+        stain_weights = {stain: sum(scores) / total_attention for stain, scores in stain_scores.items()}
+
+        ## Z-score per stain
+        global_mean = attention_scores.mean()
+        # stain_z_scores = {
+        #     stain: (
+        #         0.0 if len(scores) <= 1 else  # Handle single-node stains
+        #         (torch.tensor(scores).mean() - global_mean) /
+        #         (torch.tensor(scores).std(unbiased=False) / (len(scores) ** 0.5) + 1e-10)
+        #     )
+        #     for stain, scores in stain_scores.items()
+        # }
+
+        stain_z_scores = {stain: self.safe_z_score(scores, global_mean, attention_scores)
+                          for stain, scores in stain_scores.items()}
+
+        # 4. Pool features for each stain
         avg_pooled_features = []
         max_pooled_features = []
         for stain, stain_weight in stain_weights.items():
             # get stain mask for each node
             stain_mask = torch.tensor([data.node_attr[node_idx_mapping[i]].item() == stain
                                        for i, _ in enumerate(x)], device=x.device)
-            stain_weighted_features = weighted_features[stain_mask]
-            stain_attention = attention_scores[stain_mask]
-            stain_entropy_measure = -1 * (stain_attention * torch.log(stain_attention)).sum().item()
+            stain_weighted_features = x[stain_mask]
+
+            # Stain entropy
+            stain_attention = shifted_normalized_attn[stain_mask]
+            stain_normalized_attn = stain_attention / stain_attention.sum() # local normalisation for cross stain comparison and within stain patterns.
+            stain_entropy_measure = -1 * (stain_normalized_attn * torch.log(stain_normalized_attn + 1e-10)).sum().item()
             entropy_scores[stain].append(stain_entropy_measure)
 
             # Pool features
@@ -345,11 +370,25 @@ class bioxcpath_pooling(torch.nn.Module):
             max_pooled_stain = stain_weighted_features.max(dim=0).values
 
             # Apply stain-level weight
-            avg_pooled_features.append(avg_pooled_stain * stain_weight)
-            max_pooled_features.append(max_pooled_stain * stain_weight)
+            avg_pooled_features.append(avg_pooled_stain * stain_weight) # weight by total proportion for mean features
+            max_pooled_features.append(max_pooled_stain * stain_weight) # weight by z-score for significant features stain_z_scores[stain]
 
+        # 5. Combine pooled features via concatenation
         mean_stain_pooled = torch.stack(avg_pooled_features).sum(dim=0)
         max_stained_pool = torch.stack(max_pooled_features).sum(dim=0)
         layer_embeddings.append(torch.cat([mean_stain_pooled, max_stained_pool]))
 
-        return layer_embeddings, stain_weights, entropy_scores
+        return layer_embeddings, stain_weights, entropy_scores, stain_z_scores
+
+    def safe_z_score(self, scores, global_mean, all_scores):
+        scores_tensor = torch.tensor(scores)
+        mean_diff = scores_tensor.mean() - global_mean
+
+        # Handle single-node case more carefully
+        if len(scores) <= 1:
+            # Option 2 (alternative): Return fixed modest value preserving sign
+            return torch.tensor(1.0) if mean_diff > 0 else torch.tensor(-1.0) if mean_diff < 0 else torch.tensor(0.0)
+
+        # Normal case
+        std_error = scores_tensor.std(unbiased=False) / (len(scores) ** 0.5)
+        return mean_diff / (std_error + 1e-10)

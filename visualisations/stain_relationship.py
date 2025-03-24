@@ -10,11 +10,14 @@ from pathlib import Path
 
 
 class StainRelationship:
-    def __init__(self, args):
+    def __init__(self, args, logger):
         self.stain_names = {v: k for k, v in args.stain_types.items()}
         self.args = args
+        self.logger = logger
 
     def plot_stain_relationships(self, all_patient_data, fold_dir, subset_type):
+
+        self.logger.info(f"Plotting stain relationships for {subset_type} subset")
 
         multi_stain_patients = self._get_multi_stain_patients(all_patient_data)
 
@@ -111,6 +114,7 @@ class StainRelationship:
         Calculate statistics for a single layer
         """
         stats = []
+        all_weights = []
         stain_pair_weights = defaultdict(list)
         stain_pair_edge_types = defaultdict(list)
 
@@ -286,7 +290,7 @@ class StainRelationship:
 
         data_df = pd.DataFrame(symmetric_rows)
 
-        y_min = 0
+        y_min = data_df['mean_weight'].min() - 0.25
         y_max = data_df['mean_weight'].max()
 
         for label in sorted(data_df['label'].unique()):
@@ -319,6 +323,8 @@ class StainRelationship:
             plt.savefig(os.path.join(fold_dir, f'label_{label}_attention_box_{subset_type}.png'),
                         bbox_inches='tight')
             plt.close()
+
+            self._export_statistics(data_df, fold_dir, subset_type)
 
     # def _plot_stain_distributions(self, data_df, fold_dir, subset_type):
     #
@@ -372,12 +378,13 @@ class StainRelationship:
     #                     bbox_inches='tight')
     #         plt.close()
     #
-    #     self._export_statistics(data_df, fold_dir, subset_type)
+
 
 
     def _export_statistics(self, df, fold_dir, subset_type):
 
         stats_data = []
+        processed_pairs = set()
 
         # Split data by label
         df_label0 = df[df['label'] == 0]
@@ -391,8 +398,14 @@ class StainRelationship:
         # Get unique stains in consistent order
         all_stains = sorted(set(df['stain_1'].unique()) | set(df['stain_2'].unique()))
 
-        for stain1 in all_stains:
-            for stain2 in all_stains:
+        for i, stain1 in enumerate(all_stains):
+            for stain2 in all_stains[i:]:  # Start from i to avoid duplicates
+                # Create a sorted pair key to track processed pairs
+                pair_key = tuple(sorted([stain1, stain2]))
+                if pair_key in processed_pairs:
+                    continue
+                processed_pairs.add(pair_key)
+
                 # Get data for both labels
                 subset0 = df_label0[(df_label0['stain_1'] == stain1) &
                                     (df_label0['stain_2'] == stain2)]
@@ -448,6 +461,7 @@ class StainRelationship:
         stats_df.to_csv(output_path, index=False)
 
         # Create summary focusing on attention patterns
+        # Create summary focusing on attention patterns
         summary_path = os.path.join(fold_dir, f'attention_pattern_summary_{subset_type}.txt')
         with open(summary_path, 'w') as f:
             f.write(f"Changes in Attention Patterns ({subset_type}):\n\n")
@@ -456,19 +470,25 @@ class StainRelationship:
             major = stats_df[stats_df['Change_Category'] == 'Major']
             f.write("Major Changes in Attention:\n")
             for _, row in major.iterrows():
-                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% {row['Direction']}\n")
+                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% {row['Direction']} (Relative Change: {row['Relative_Change']:.1f}%)\n")
 
             # Moderate changes
             moderate = stats_df[stats_df['Change_Category'] == 'Moderate']
             f.write("\nModerate Changes in Attention:\n")
             for _, row in moderate.iterrows():
-                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% {row['Direction']}\n")
+                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% {row['Direction']} (Relative Change: {row['Relative_Change']:.1f}%)\n")
+
+            # Minor changes
+            minor = stats_df[stats_df['Change_Category'] == 'Minor']
+            f.write("\nMinor Changes in Attention:\n")
+            for _, row in minor.iterrows():
+                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% {row['Direction']} (Relative Change: {row['Relative_Change']:.1f}%)\n")
 
             # Most stable interactions
             stable = stats_df[stats_df['Change_Category'] == 'Minimal']
             f.write("\nMost Stable Attention Patterns:\n")
             for _, row in stable.iterrows():
-                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% change\n")
+                f.write(f"• {row['Stain_1']}-{row['Stain_2']}: {row['Percent_Change']:.1f}% change (Relative Change: {row['Relative_Change']:.1f}%)\n")
 
             # Add summary statistics
             f.write("\nSummary Statistics:\n")
@@ -477,6 +497,7 @@ class StainRelationship:
             f.write(f"Total Stain Pairs Analyzed: {len(stats_df)}\n")
             f.write(f"Number of Major Changes: {len(major)}\n")
             f.write(f"Number of Moderate Changes: {len(moderate)}\n")
+            f.write(f"Number of Minor Changes: {len(minor)}\n")
             f.write(f"Number of Stable Patterns: {len(stable)}\n")
 
         return stats_df

@@ -32,8 +32,8 @@ class GraphVisualiser:
                 self._visualise_graph_on_wsi(metadata, G, i + 1, patient, patient_dir, fold)
 
                 # Plot graph
-                self._plot_graph(G, f"Layer {i + 1} Graph - Patient {patient}",
-                                 os.path.join(patient_dir, f"krag_graph_layer_{i + 1}_{patient}_Fold_{fold}.png"))
+                # self._plot_graph(G, f"Layer {i + 1} Graph - Patient {patient}",
+                #                  os.path.join(patient_dir, f"krag_graph_layer_{i + 1}_{patient}_Fold_{fold}.png"))
 
     def _plot_graph(self, G, title, output_path, sampling_rate=0.3, layout_seed=42):
         """
@@ -175,6 +175,8 @@ class GraphVisualiser:
         plt.close()
 
     def _visualise_graph_on_wsi(self, metadata, G, layer, patient_id, output_dir, fold):
+
+        self.logger.info(f"Plotting graph on WSIs for patient {patient_id} - Layer {layer}")
 
         fig, ax = plt.subplots(figsize=(30, 20))
 

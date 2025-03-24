@@ -151,7 +151,7 @@ class MUSTANG_Classifier(torch.nn.Module):
 #
 #         # self.attention = attention
 #
-#         self.krag = bioxcpath_pooling(in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type)
+#         self.krag = bioxcpath(in_features, hidden_dim, heads, pooling_ratio, walk_length, conv_type)
 #
 #         # if self.attention:
 #         #     self.attention_weights = nn.Parameter(torch.Tensor(hidden_dim * 2, hidden_dim * 2))
@@ -181,7 +181,7 @@ class MUSTANG_Classifier(torch.nn.Module):
 #         return logits, Y_prob, label
 #
 #
-# class bioxcpath_pooling(torch.nn.Module):
+# class bioxcpath(torch.nn.Module):
 #
 #     """"""
 #

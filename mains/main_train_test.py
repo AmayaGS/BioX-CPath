@@ -13,11 +13,11 @@ import torch
 from torch_geometric.loader import DataLoader
 
 # KRAG functions
-from train_test_loops.krag_train_val_loop import train_val_loop
-from train_test_loops.krag_test_loop import test_loop, ensemble_test_results
+from train_test_loops.bioxcpath_train_val_loop import train_val_loop
+from train_test_loops.bioxcpath_test_loop import test_loop, ensemble_test_results
 from utils.profiling_utils import train_profiler, test_profiler
 from utils.model_utils import load_data, minority_sampler, prepare_data_loaders, initialise_model
-from utils.model_utils import summarise_train_results, summarise_val_results
+from utils.model_utils import summarise_train_results, summarise_val_results, summarise_test_results
 from utils.plotting_functions_utils import plot_roc_curve
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -97,8 +97,8 @@ def test_model(args, results_dir, logger):
             model, loss, _, _ = initialise_model(args)
 
             # load best model
-            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_loss.pth")
-            model.load_state_dict(checkpoint)
+            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + f"_{args.weight_type}.pth", weights_only=True)
+            model.load_state_dict(checkpoint, strict=True)
 
             val_loader = DataLoader(val_fold, batch_size=args.batch_size, shuffle=False,
                                            num_workers=args.num_workers, drop_last=False)
@@ -123,7 +123,7 @@ def test_model(args, results_dir, logger):
             model, loss, _, _ = initialise_model(args)
 
             # load best model from training and validation
-            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + "_loss.pth", weights_only=True)
+            checkpoint = torch.load(checkpoints + "/best_val_models/checkpoint_fold_" + str(fold_idx) + f"_{args.weight_type}.pth", weights_only=True)
             model.load_state_dict(checkpoint, strict=True)
 
             test_loader = DataLoader(test_fold, batch_size=args.batch_size, shuffle=False,
@@ -145,8 +145,7 @@ def test_model(args, results_dir, logger):
             with open(f"{results_dir}/results_fold_{fold_idx}.pkl", 'wb') as f:
                 pickle.dump(test_results, f)
 
-        #summarise_test_results(all_results, results_dir, logger, args)
-        summarise_val_results(all_results, results_dir, logger, args)
+        summarise_test_results(all_results, results_dir, logger, args)
         ensemble_test_results(args, results_dir, all_results, logger)
 
         logger.info("Inference Profiling Results:")

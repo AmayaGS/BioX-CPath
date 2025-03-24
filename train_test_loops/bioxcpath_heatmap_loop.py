@@ -22,7 +22,7 @@ def heatmap_scores(args, graph_net, test_loader, patient_ID, loss_fn, n_classes)
         if use_gpu:
             data, label = data.cuda(), label.cuda()
 
-        logits, Y_prob, layer_attention, stain_attention, entropy_scores, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data = graph_net(data, filenames)
+        logits, Y_prob, layer_attention, stain_attention, stain_z_scores, entropy_scores, all_patches_per_layer, all_patches_cumulative, all_patches_replaced, layer_data = graph_net(data, filenames)
 
         attention_scores[patient_ID] = {
             'per_layer': all_patches_per_layer,
@@ -38,5 +38,5 @@ def heatmap_scores(args, graph_net, test_loader, patient_ID, loss_fn, n_classes)
             del data, logits, Y_prob
             torch.cuda.empty_cache()
 
-    return label.cpu(), Y_hat, metadata, attention_scores, layer_data_dict, layer_attention, stain_attention, entropy_scores
+    return label.cpu(), Y_hat, metadata, attention_scores, stain_z_scores, entropy_scores, layer_data_dict, layer_attention, stain_attention
 

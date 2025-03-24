@@ -7,10 +7,10 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.utils import to_networkx
 import gc
 
-from mains.main_embedding import use_gpu
+from utils.model_utils import load_data, initialise_model
 from models.BioXCPath_explainability import BioXCPath_explainable_model
 from .graph_metrics import GraphMetricGenerator
-from train_test_loops.krag_heatmap_loop import heatmap_scores
+from train_test_loops.bioxcpath_heatmap_loop import heatmap_scores
 
 
 class VisualisationResultsGenerator:
@@ -31,8 +31,9 @@ class VisualisationResultsGenerator:
         Returns:
             dict: Dictionary of metrics data for all processed patients
         """
+
         graph_dict = self._load_graph_dict()
-        graph_net = self._initialize_model(fold)
+        graph_net = self._initialize_model(self.args, fold)
 
         all_metrics = {}
         all_patient_data = {}
@@ -64,13 +65,14 @@ class VisualisationResultsGenerator:
                 if metrics is None:
                     continue
 
-                # Combine all patient data for visualization
+                # Combine all patient data for visualization TODO this would be better as a dictionary
                 all_metrics[patient_id] = [
                     patient_data['actual_label'],
                     patient_data['predicted_label'],
                     patient_data['stain_attention'],
                     patient_data['layer_attention'],
                     patient_data['entropy_scores'],
+                    patient_data['stain_z_scores'],
                     metrics
                 ]
 
@@ -125,13 +127,14 @@ class VisualisationResultsGenerator:
         test_graph_loader = DataLoader(slide_embedding, batch_size=1, shuffle=False,
                                        num_workers=self.args.num_workers, pin_memory=False)
 
-        actual_label, predicted_label, metadata, attention_scores, layer_data, layer_attention, stain_attention, entropy_scores = heatmap_scores(self.args,
+        (actual_label, predicted_label, metadata, attention_scores, stain_z_scores,
+         entropy_scores, layer_data, layer_attention, stain_attention) = heatmap_scores(self.args,
             graph_net, test_graph_loader, patient_id, self.loss_fn, n_classes=self.args.n_classes)
 
         patient_graphs = self._create_patient_graphs(layer_data, patient_id)
 
         return {
-            'actual_label': actual_label.item(), # this might not work anymore
+            'actual_label': actual_label.item(),
             'predicted_label': predicted_label.item(),
             'metadata': metadata,
             'attention_scores': attention_scores,
@@ -139,7 +142,8 @@ class VisualisationResultsGenerator:
             'stain_attention': stain_attention,
             'entropy_scores': entropy_scores,
             'layer_data': layer_data,
-            'graphs': patient_graphs
+            'graphs': patient_graphs,
+            'stain_z_scores': stain_z_scores
         }
 
     def _create_patient_graphs(self, layer_data, patient_id):
@@ -157,7 +161,7 @@ class VisualisationResultsGenerator:
         node_scores = data.node_att_scores.cpu().detach().numpy()
         node_scores = 100 + (node_scores - node_scores.min()) / (node_scores.max() - node_scores.min() + 1e-9) # Normalizing node scores
         edge_weights = data.attention_weights.cpu().detach().numpy().mean(axis=1)
-        edge_weights = 1 + (edge_weights - edge_weights.min()) / (edge_weights.max() - edge_weights.min()) # Normalizing edge weights
+        edge_weights = 1 + (edge_weights - edge_weights.min()) / (edge_weights.max() - edge_weights.min() + 1e-9) # Normalizing edge weights
 
         for j, node in enumerate(G.nodes()):
             original_index = data.node_mapping[j]
@@ -177,19 +181,24 @@ class VisualisationResultsGenerator:
 
         return G
 
-    def _initialize_model(self, fold):
-        graph_net = BioXCPath_explainable_model(in_features=self.args.embedding_vector_size, edge_attr_dim=len(self.args.edge_types),
-                                                node_attr_dim=len(self.args.stain_types), hidden_dim=self.args.hidden_dim,
-                                                num_classes=self.args.n_classes, heads=self.args.heads, pooling_ratio=self.args.pooling_ratio,
+    def _initialize_model(self, args, fold):
+        graph_net = BioXCPath_explainable_model(in_features=self.args.embedding_vector_size,
+                                                edge_attr_dim=len(self.args.edge_types),
+                                                node_attr_dim=len(self.args.stain_types),
+                                                hidden_dim=self.args.hidden_dim, num_classes=self.args.n_classes,
+                                                heads=self.args.heads, pooling_ratio=self.args.pooling_ratio,
                                                 walk_length=self.args.encoding_size, conv_type=self.args.convolution,
-                                                num_layers=self.args.num_layers, embedding_dim=10, dropout_rate=self.args.dropout,
-                                                use_node_embedding=self.args.use_node_embedding, use_edge_embedding=self.args.use_edge_embedding,
+                                                num_layers=self.args.num_layers, embedding_dim=10,
+                                                dropout_rate=self.args.dropout,
+                                                use_node_embedding=self.args.use_node_embedding,
+                                                use_edge_embedding=self.args.use_edge_embedding,
                                                 use_attention=self.args.use_attention)
 
         checkpoints = os.path.join(self.results_dir, "checkpoints", "best_val_models")
-        checkpoint = os.path.join(checkpoints, f"checkpoint_fold_{fold}_accuracy.pth")
+        checkpoint = os.path.join(checkpoints, f"checkpoint_fold_{fold}_{args.weight_type}.pth")
         checkpoint_weights = torch.load(checkpoint, weights_only=True)
-        graph_net.load_state_dict(checkpoint_weights, strict=False)
+        graph_net.load_state_dict(checkpoint_weights, strict=True)
+
         if torch.cuda.is_available():
             graph_net.cuda()
         graph_net.eval()

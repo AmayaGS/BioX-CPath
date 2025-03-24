@@ -13,8 +13,8 @@ import torch
 from torch_geometric.loader import DataLoader
 
 # KRAG functions
-from train_test_loops.krag_train_val_loop import train_val_loop
-from train_test_loops.krag_test_loop import test_loop
+from train_test_loops.bioxcpath_train_val_loop import train_val_loop
+from train_test_loops.bioxcpath_test_loop import test_loop
 from utils.profiling_utils import train_profiler, test_profiler
 from utils.model_utils import load_data, minority_sampler, prepare_data_loaders, initialise_model
 from utils.model_utils import summarise_train_results, summarise_test_results

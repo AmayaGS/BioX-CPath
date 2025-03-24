@@ -1,18 +1,18 @@
 # Paths
 paths:
-  input_directory: "C:/Users/Amaya/Documents/PhD/Data/R4RA_results" # Histopathology Slide location - unprocessed.
-  output_directory: "C:/Users/Amaya/Documents/PhD/Data/R4RA_results"
+  input_directory: "C:/Users/Amaya/Documents/PhD/Data/Sjogren_Janssen"
+  output_directory: "C:/Users/Amaya/Documents/PhD/Data/Sjogren_Janssen"
   embedding_weights: "C:/Users/Amaya/Documents/PhD/Data/WSI_foundation/"
-  path_to_patches: "C:/Users/Amaya/Documents/PhD/Data/R4RA_results/extracted_patches_2/patches"
+  path_to_patches: "C:/Users/Amaya/Documents/PhD/Data/Sjogren_Janssen/extracted_patches_1/patches"
   unet_weights: "C:/Users/Amaya/Documents/PhD/Data/UNet_512_1.pth.tar"
 
 # Dataset configurations
 dataset:
-  name: "RA"  # choices: ['RA', 'Sjogren']
+  name: "Sjogren"  # choices: ['RA', 'Sjogren']
   patch_size: 224
   overlap: 0
-  coverage: 0.4 # percent of tissue coverage in the patch
-  slide_level: 2
+  coverage: 0.4
+  slide_level: 1
   mask_level: 2
   patch_batch_size: 10
   train_fraction: 0.8
@@ -23,15 +23,15 @@ dataset:
 parsing:
   patient_ID: 'img.split("_")[0]' # "Patient123_stain.tiff" -> Patient123
   stain: 'img.split("_")[1]' # "Patient123_stain.tiff" -> stain
-  stain_types: {'NA': 0, 'H&E': 1, 'CD68': 2, 'CD138': 3, 'CD20': 4} # RA stain types
-  stain_colors: {'H&E': 'tab:pink', 'CD68': 'tab:brown', 'CD20': 'tab:blue', 'CD138': 'tab:orange'}
-  edge_types: { 'RAG': 0, 'KNN': 1, 'BOTH': 2 }
-  edge_colors: { 'RAG': 'red', 'KNN': 'dodgerblue', 'BOTH': 'blueviolet' }
+  stain_types: {'NA': 0, 'HE': 1, 'CD3': 2, 'CD138': 3, 'CD20': 4, 'CD21': 5} # Sjogren stain types
+  stain_colors: {'HE': 'tab:pink', 'CD138': 'tab:orange', 'CD3': 'tab:olive', 'CD20': 'tab:blue', 'CD21': 'tab:cyan'}
+  edge_types: {'RAG': 0, 'KNN': 1, 'BOTH': 2}
+  edge_colors: {'RAG': 'red', 'KNN': 'dodgerblue', 'BOTH': 'blueviolet'}
 
 # Label/split configurations
 labels:
   label: 'label'
-  label_dict: {'0': 'Pauci-Immune', '1': 'Lymphoid/Myeloid'}
+  label_dict: {'0': 'Sicca', '1': 'Sjogren'}
   n_classes: 2
   patient_id: 'Patient_ID'
 
@@ -49,8 +49,8 @@ GNN:
   use_edge_embedding: false
   attention_heads: 2
   use_attention: true
-  pooling_ratio: 0.7
-  dropout: 0.5
+  pooling_ratio: 0.5
+  dropout: 0.4
 
 training:
   hidden_dim: 512
@@ -68,7 +68,7 @@ training:
 
 # Visualization configurations
 visualization:
-  test_fold: 1
+  test_fold: 3
   test_ids: null
   specific_ids: false
 
@@ -160,3 +160,4 @@ embedding_classes:
   Phikon_embedding: "models.embedding_models.Phikon_embedding"
   BiOptimus_embedding: "models.embedding_models.BiOptimus_embedding"
   UNI_embedding: "models.embedding_models.UNI_embedding"
+

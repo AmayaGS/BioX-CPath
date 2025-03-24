@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.nn import SAGPooling
+
+from models.sag_pool_biox import SAGPooling
 
 
 class LayerConcatSelfAttention(nn.Module):
@@ -54,8 +55,8 @@ class BioXCPath_Classifier(nn.Module):
 
         self.use_attention = use_attention
 
-        self.bioxcpath_pooling = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
-                                                   walk_length, conv_type, num_layers, embedding_dim, use_node_embedding, use_edge_embedding)
+        self.bioxcpath = bioxcpath_pooling(in_features, edge_attr_dim, node_attr_dim, hidden_dim, heads, pooling_ratio,
+                                           walk_length, conv_type, num_layers, embedding_dim, use_node_embedding, use_edge_embedding)
 
         concat_dim = hidden_dim * 2 * num_layers
         self.layer_attention = LayerConcatSelfAttention(hidden_dim * 2, num_layers, num_heads=1, dropout_rate=dropout_rate)
@@ -65,7 +66,7 @@ class BioXCPath_Classifier(nn.Module):
         self.classifier2 = nn.Linear(concat_dim // 2, num_classes)
 
     def forward(self, data, label):
-        x = self.bioxcpath_pooling(data)  # x shape: (1, num_layers * hidden_dim * 2)
+        x = self.bioxcpath(data)  # x shape: (1, num_layers * hidden_dim * 2)
 
         if self.use_attention:
             # Apply self-attention
@@ -138,6 +139,8 @@ class bioxcpath_pooling(torch.nn.Module):
         if self.walk_length > 0:
             random_walk_pe = data.random_walk_pe
 
+        # Initialise node idx tracking through pooling layers
+        node_idx_mapping = {i: i for i in range(x.size(0))}  # k=node,v=original idx
         layer_embeddings = []
         for i in range(self.num_layers):
             if self.walk_length > 0:
@@ -153,27 +156,40 @@ class bioxcpath_pooling(torch.nn.Module):
             else:
                 x = F.relu(self.convolutions[i](x, edge_index))
 
-            x, edge_index, edge_attr_embedded, batch, perm, attention_scores = self.pooling_layers[i](x, edge_index, edge_attr_embedded, batch)
+            x, edge_index, edge_attr_embedded, batch, perm, attention_scores, _ = self.pooling_layers[i](x, edge_index, edge_attr_embedded, batch)
+
+            node_idx_mapping = self.update_node_mapping(node_idx_mapping, perm)
+
+            #node_stain_map = [data.node_attr[node_idx_mapping[i]].item() for i in range(len(attention_scores))]
 
             # SAAPooling
+            # Calculate stain-level weights from attention scores
             stain_scores = defaultdict(list)
             for node, score in enumerate(attention_scores):
-                stain = data.node_attr[perm][node].item()
+                stain = data.node_attr[node_idx_mapping[node]].item()
                 stain_scores[stain].append(score)
 
-            normalized_stain_scores = {stain: torch.tensor(scores).mean() for stain, scores in stain_scores.items()}
-            total_score = sum(normalized_stain_scores.values())
-            normalized_stain_scores = {stain: score / total_score for stain, score in normalized_stain_scores.items()}
+            ## Total proportion of attention per stain for weight calculation
+            total_attention = attention_scores.sum()
+            stain_weights = {stain: sum(scores) / total_attention for stain, scores in stain_scores.items()}
 
             avg_pooled_features = []
             max_pooled_features = []
-            for stain, weight in normalized_stain_scores.items():
-                stain_mask = (data.node_attr[perm] == stain)
-                stain_features = x[stain_mask]
-                avg_pooled_stain_features = stain_features.mean(dim=0) * weight
-                max_pooled_stain_features = stain_features.max(dim=0).values * weight
-                avg_pooled_features.append(avg_pooled_stain_features)
-                max_pooled_features.append(max_pooled_stain_features)
+            for stain, stain_weight in stain_weights.items():
+                # get stain mask for each node
+                # stain_mask = torch.tensor([node_stain_map[i] == stain for i in range(len(x))],
+                #                             device=x.device)
+                stain_mask = torch.tensor([data.node_attr[node_idx_mapping[i]].item() == stain
+                                           for i, _ in enumerate(x)], device=x.device)
+                stain_weighted_features = x[stain_mask]
+
+                # Pool features
+                avg_pooled_stain = stain_weighted_features.mean(dim=0)
+                max_pooled_stain = stain_weighted_features.max(dim=0).values
+
+                # Apply stain-level weight
+                avg_pooled_features.append(avg_pooled_stain * stain_weight)
+                max_pooled_features.append(max_pooled_stain * stain_weight)
 
             mean_stain_pooled = torch.stack(avg_pooled_features).sum(dim=0)
             max_stained_pool = torch.stack(max_pooled_features).sum(dim=0)
@@ -185,4 +201,13 @@ class bioxcpath_pooling(torch.nn.Module):
                 node_attr_embedded = node_attr_embedded[perm]
 
         x = torch.cat(layer_embeddings, dim=0).unsqueeze(0)
+
         return x
+
+    def update_node_mapping(self, node_mapping, perm):
+        new_node_mapping = {}
+        for new_idx, old_idx in enumerate(perm.tolist()):
+            original_idx = node_mapping[old_idx]
+            new_node_mapping[new_idx] = original_idx
+
+        return new_node_mapping
