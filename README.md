@@ -162,6 +162,6 @@ python main.py --heatmap --directory path/to/output --dataset_name dataset_name 
 
 This will generate smoothed heatmaps for the test folds using the trained model weights and store them in the `heatmap_path` directory. Heatmaps maps can be examined overall or for each layer of the model, as shown below:
 
-![](multi_stain_v2.png)
+![](GNN_heatmap_cumulative.png)
 
-![](heatmap_per_layer.png)
+![](spatial_GNN_graph.png)
