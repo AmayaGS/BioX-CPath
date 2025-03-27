@@ -10,40 +10,6 @@ The development of biologically interpretable and explainable models remains a k
 
 ![](pipeline_final.png)
 
-## Pipeline
-
-### Preprocessing
-
-- **Segmentation.** A automated tissue segmentation step, using adaptive thresholding to segment tissue areas on the WSIs.
-- **Patching.** After segmentation, the tissue area is divided into patches at a size chosen by the user (eg. 224 x 224), which can be overlapping or non-overlapping.
-- **Coordinates extraction.** For each patch, the (x,y)-coordinates are saved to a .csv file from the tissue segmentation.
-- **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into [1 \times 1024] feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.
-
-### Graph Initialization
-
-- **Adjacency matrix construction.** The patch coordinates are used to create a region 
-  Adjacency matrix A_{RA}, where edges existing between spatially adjacent patches are 
-  1 if they are spatially adjacent and 0 otherwise, both on the (x,y) plane and z-axis. 
-  The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a Adjacency matrix A_{FS} is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
-- **Graph construction** The max between A_{RA} and A_{FS} is taken to obtain A_{FRA}.
-  A directed, unweighted G_{FRA} graph is initialised using the adjacency matrix A_
-  {FRA}
-
-### BioX-CPath Pipeline
-
-- **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.
-- **Hierarchical Graph classification.** The G_{FRA} is successively passed through 
-  Graph Attention Network layers (GAT) and Stain-Aware Attention Pooling (SAAP) layers. 
-  The SAAP readouts from each layer are concatenated and passed through a 
-  Multi-Head-Self-Attention layer, before passing through a final classification layer.
-
-### Biological Interpretability
-
-- **Stain Attention Scores.**
-- **Stain Entropy.**
-- **Stain Interaction Scores**.
-- **GNN node Heatmaps**.
-
 ## Setup
 
 First clone the repository to the desire location and enter the directory:
@@ -160,7 +126,40 @@ Heatmaps can be generated using the following command:
 python main.py --heatmap --directory path/to/output --dataset_name dataset_name --path_to_patches path/to/patches --heatmap_path path/to/save/heatmaps
 ```
 
-This will generate smoothed heatmaps for the test folds using the trained model weights and store them in the `heatmap_path` directory. Heatmaps maps can be examined overall or for each layer of the model, as shown below:
+## Pipeline
+
+### Preprocessing
+
+- **Segmentation.** A automated tissue segmentation step, using adaptive thresholding to segment tissue areas on the WSIs.
+- **Patching.** After segmentation, the tissue area is divided into patches at a size chosen by the user (eg. 224 x 224), which can be overlapping or non-overlapping.
+- **Coordinates extraction.** For each patch, the (x,y)-coordinates are saved to a .csv file from the tissue segmentation.
+- **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into [1 \times 1024] feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.
+
+### Graph Initialization
+
+- **Adjacency matrix construction.** The patch coordinates are used to create a region 
+  Adjacency matrix A_{RA}, where edges existing between spatially adjacent patches are 
+  1 if they are spatially adjacent and 0 otherwise, both on the (x,y) plane and z-axis. 
+  The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a Adjacency matrix A_{FS} is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
+- **Graph construction** The max between A_{RA} and A_{FS} is taken to obtain A_{FRA}.
+  A directed, unweighted G_{FRA} graph is initialised using the adjacency matrix A_
+  {FRA}
+
+### BioX-CPath Pipeline
+
+- **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.
+- **Hierarchical Graph classification.** The G_{FRA} is successively passed through 
+  Graph Attention Network layers (GAT) and Stain-Aware Attention Pooling (SAAP) layers. 
+  The SAAP readouts from each layer are concatenated and passed through a 
+  Multi-Head-Self-Attention layer, before passing through a final classification layer.
+
+### Biological Interpretability
+
+- **Stain Attention Scores.**
+- **Stain Entropy.**
+- **Stain Interaction Scores**.
+- **GNN node Heatmaps**.
+
 
 ![](GNN_heatmap_cumulative.png)
 
