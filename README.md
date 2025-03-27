@@ -45,13 +45,11 @@ pip install -r requirements.txt
 
 During preprocessing, the following steps are performed: **tissue segmentation**, **patching**, **feature extraction**, **adjacency matrix construction**, and **graph construction**. Finally, **random walk positional encoding** is pre-computed on the generated graphs and stored as a pytorch geometric transform. 
 
-#### Arguments
-
-All arguments used to run the code are defined using `Argument parser` and can be modified using the command line.
-
 #### Data Directory Structure
 
-The WSIs should be stored in a directory structure as shown below. The `slides` folder is the `input_directory`, which the `config` file should point to. It should contain all the WSIs for each patient, with the naming convention `patientID_staintype.tiff`. The `patient_labels.csv` file should contain the patient IDs and the target labels for the task:
+The `patient_labels.csv` and WSIs should be stored in a directory structure as shown 
+below. The `slides` folder is the `input_directory`, which the `config` file should 
+point to. It should contain all the WSIs for each patient, with the naming convention `patientID_staintype.tiff`. The `patient_labels.csv` file should contain the patient IDs and the target labels for the task:
 
 ```
 --- Dataset_name
@@ -65,6 +63,40 @@ The WSIs should be stored in a directory structure as shown below. The `slides` 
             --- patientN_HE.tiff
             --- patientN_CD138.tiff
 ```
+#### Config file
+
+All the system arguments and execution flags are defined in the `{Dataset}_config.yaml` file. All the arguments can be modified there for a given run. You can also modify any of these arguments via the command line. 
+
+You should first modify the paths to point towards your input and output folders:
+
+```yaml
+paths:
+  input_directory: "/path/to/input/slides"
+  output_directory: "/path/to/output/folder"
+  embedding_weights: "path/to/embedding/weights"
+  path_to_patches: "path/to/extracted/patches" # this is for heatmap generation. 
+```
+
+You should also modify the parsing and label configs to suit your dataset:
+
+```yaml
+# Parsing configurations for 
+parsing:
+  patient_ID: 'img.split("_")[0]' # "Patient123_stain" -> Patient123
+  stain: 'img.split("_")[1]' # "Patient123_stain" -> stain
+  stain_types: {'NA': 0, 'H&E': 1, 'CD68': 2, 'CD138': 3, 'CD20': 4} # RA stain types
+
+
+# Label/split configurations
+labels:
+  label: 'label'
+  label_dict: {'0': 'Pauci-Immune', '1': 'Lymphoid/Myeloid'} # RA subtypes label names
+  n_classes: 2
+  patient_id: 'Patient_ID'
+```
+
+The stain_types dictionary maps the stain types in your dataset to numeric coding. 
+Change the 'label' category to the column name in you `patient_label.csv` file, as well as the patient_id column name.  
 
 Preprocessing can be run using the following command:
 
@@ -118,13 +150,20 @@ python main.py --test --directory path/to/output --dataset_name dataset_name
 
 This will test the corresponding model weights on the hold-out test set and store final results in the `output` directory.
 
-### Heatmap Generation
+### Biological Interpretability
 
-Heatmaps can be generated using the following command:
+Plots visualising the different metrics can be generated using the following command:
 
 ```bash
-python main.py --heatmap --directory path/to/output --dataset_name dataset_name --path_to_patches path/to/patches --heatmap_path path/to/save/heatmaps
+python main.py --visualise --directory path/to/output --dataset_name dataset_name 
+--path_to_patches path/to/patches
 ```
+
+This will generate the following plots: 
+
+- **patient level** stain importance, entropy scores, and stain interaction scores, as 
+  well as GNN node heatmaps and spatial GNN graphs.
+- **dataset level** stain importance, entropy scores, and stain interaction scores.
 
 ## Pipeline
 
