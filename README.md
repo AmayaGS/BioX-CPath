@@ -8,19 +8,41 @@
 
 The development of biologically interpretable and explainable models remains a key challenge in computational pathology, particularly for multistain immunohistochemistry (IHC) analysis. We present BioX-CPath, an explainable graph neural network architecture for whole slide image (WSI) classification that leverages both spatial and semantic features across multiple stains. At its core, BioX-CPath introduces a novel Stain-Aware Attention Pooling (SAAP) module that generates biologically meaningful, stain-aware patient embeddings. Our approach achieves state-of-the-art performance on both Rheumatoid Arthritis and Sjogren's Disease multistain datasets. Beyond performance metrics, BioX-CPath provides interpretable insights through stain attention scores, entropy measures, and stain interaction scores, that permit measuring model alignment with known pathological mechanisms. This biological grounding, combined with strong classification performance, makes BioX-CPath particularly suitable for clinical applications where interpretability is key. 
 
-![](pipeline_final.pdf)
+![](model_schema.png)
 
-### Pipeline
+## Pipeline
+
+### Preprocessing
 
 - **Segmentation.** A automated tissue segmentation step, using adaptive thresholding to segment tissue areas on the WSIs.
 - **Patching.** After segmentation, the tissue area is divided into patches at a size chosen by the user (eg. 224 x 224), which can be overlapping or non-overlapping.
 - **Coordinates extraction.** For each patch, the (x,y)-coordinates are saved to a .csv file from the tissue segmentation.
 - **Feature extraction.** Each image patch is passed through a CNN feature extractor and embedded into [1 \times 1024] feature vectors. All feature vectors from a given patient are aggregated into a matrix. The number of rows in the matrix will vary as each patient has a variable set of WSIs, each with their own dimensions.
-- **Adjacency matrix construction.** The patch coordinates are used to create a region Adjacency matrix A_{RAG}, where edges existing between spatially adjacent patches are 1 if they are spatially adjacent and 0 otherwise. The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a KNN Adjacency matrix A_{KNN} is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
-- **Graph construction** The Adjacency matrices A_{RA} and A_{KNN} are summed, with shared edges reset to 1, creating an Adjacency matrix A_{KRAG}. For each patient a directed, unweighted KNN+RA graph is initialised using the adjacency matrix A_{KRAG}, combining both local - RA - and global - KNN - information.
+
+### Graph Initialization
+
+- **Adjacency matrix construction.** The patch coordinates are used to create a region 
+  Adjacency matrix A_{RA}, where edges existing between spatially adjacent patches are 
+  1 if they are spatially adjacent and 0 otherwise, both on the (x,y) plane and z-axis. 
+  The matrix of feature vectors is used to calculate the pairwise Euclidean distance between all patches. The top-k nearest neighbours in feature space are selected and a Adjacency matrix A_{FS} is created, where the edges between the k-nearest neighbours is 1 and 0 otherwise.
+- **Graph construction** The max between A_{RA} and A_{FS} is taken to obtain A_{FRA}.
+  A directed, unweighted G_{FRA} graph is initialised using the adjacency matrix A_
+  {FRA}
+
+### BioX-CPath Pipeline
+
 - **Random Walk positional encoding.** For each node in the graph, a random walk of fixed length k is performed, starting from a given node and considering only the landing probability of transitioning back to the node i itself at each step.
-- **Hierarchical Graph classification.** The KRAG is successively passed through four Graph Attention Network layers (GAT) and SAGPooling layers. The SAGPooling readouts from each layer are concatenated and passed through three MLP layers. This concatenated vector is passed through a self-attention head and finally classified.
-- **Heatmap generation.** Sagpool scores.
+- **Hierarchical Graph classification.** The G_{FRA} is successively passed through 
+  Graph Attention Network layers (GAT) and Stain-Aware Attention Pooling (SAAP) layers. 
+  The SAAP readouts from each layer are concatenated and passed through a 
+  Multi-Head-Self-Attention layer, before passing through a final classification layer.
+
+### Biological Interpretability
+
+- **Stain Attention Scores.**
+- **Stain Entropy.**
+- **Stain Interaction Scores**.
+- **GNN node Heatmaps**.
 
 ## Setup
 
