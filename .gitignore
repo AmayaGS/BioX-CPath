@@ -9,10 +9,5 @@
 *.pyc
 *.pyc
 *.iml
-/calculate_variance
-/unet_segmentation
-/data
-/data/home/MUSTANGv2/calculate_variance
 /__pycache__
 .gitattributes
-.gitignore
