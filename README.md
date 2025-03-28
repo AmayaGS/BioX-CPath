@@ -22,7 +22,7 @@
 
 ## Setup
 
-First clone the repository to the desire location and enter the directory:
+First clone the repository to the desired location and enter the directory:
 
 ```bash
 # clone project to desired location
@@ -111,7 +111,7 @@ Change the 'label' category to the column name in you `patient_label.csv` file, 
 Preprocessing can be run using the following command:
 
 ```bash
-python main.py --preprocess --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
+python main.py --preprocess --config "{Dataset}_config.yaml"
 ```
 `--preprocess` will create 4 new folders: output, dictionaries, masks, contours.
 
@@ -139,7 +139,7 @@ python main.py --compute_rwpe # Random walk positional encoding
 Training is run using the following command:
 
 ```bash
-python main.py --train --input_directory path/to/slides --directory path/to/output --dataset_name dataset_name
+python main.py --train --config "{Dataset}_config.yaml"
 ```
 
 The results will be stored in the `output` directory. There you will find training/validation logs for each fold + summary statistics, as well as model weights in the `checkpoints` folder.
@@ -155,7 +155,7 @@ python main.py --help
 Testing is run on the different hold-out folds using the following command:
 
 ```bash
-python main.py --test --directory path/to/output --dataset_name dataset_name
+python main.py --test --config "{Dataset}_config.yaml"
 ```
 
 This will test the corresponding model weights on the hold-out test set and store final results in the `output` directory.
@@ -165,7 +165,7 @@ This will test the corresponding model weights on the hold-out test set and stor
 Plots visualising the different metrics can be generated using the following command:
 
 ```bash
-python main.py --visualise --directory path/to/output --dataset_name dataset_name 
+python main.py --visualise --config "{Dataset}_config.yaml"
 --path_to_patches path/to/patches
 ```
 
