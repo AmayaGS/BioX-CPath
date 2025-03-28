@@ -213,3 +213,20 @@ This will generate the following plots:
 ![](figures/GNN_heatmap_cumulative.png)
 
 ![](figures/spatial_GNN_graph.png)
+
+--------------
+
+If this code or article were useful to you, please consider citing:
+
+````
+@article{BioXCPath_GS_2025,
+    author    = {Amaya Gallagher-Syed and Henry Senior and Omnia Alwazzan and Elena Pontarini and Michele Bombardieri and Costantino Pitzalis and Myles J. Lewis and Michael R. Barnes and Luca Rossi and Gregory Slabaugh},
+    title     = {BioX-CPath: Biologically-driven Explainable Diagnostics for Multistain IHC Computational Pathology},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2025},
+    eprint={https://arxiv.org/abs/2503.20880}
+}
+````
+
+--------------
