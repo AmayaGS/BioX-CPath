@@ -212,10 +212,13 @@ This will generate the following plots:
 
 ![](figures/GNN_heatmap_cumulative.png)
 
-![](figures/spatial_GNN_graph.png)
+<div align="center">
+<img src="figures/spatial_graph.gif" width="25%" height="25%">
+</div>
+
+<!-- Force Markdown context reset -->
 
 --------------
-
 If this code or article were useful to you, please consider citing:
 
 ````
@@ -228,5 +231,4 @@ If this code or article were useful to you, please consider citing:
     eprint={https://arxiv.org/abs/2503.20880}
 }
 ````
-
 --------------
