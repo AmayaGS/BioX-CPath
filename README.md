@@ -1,12 +1,22 @@
-[![DOI:10.1101/2021.01.08](http://img.shields.io/badge/DOI-10.1101/2021.01.08-B31B1B.svg)](https://doi.org/10.1101/2021.01.08.)
+<div align="center">
 
-# BioX-CPath
+# BioX-CPath: Biologically-driven Explainable Diagnostics for Multistain IHC Computational Pathology
+
+[![arXiv](https://img.shields.io/badge/CVPR_2025-2503.20880-blue.svg?style=plastic)](https://arxiv.org/abs/2503.20880)
+<a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white"></a>
+<a href="https://pytorch-geometric.readthedocs.io/en/latest/"><img height=20 alt="PyG" src="https://raw.githubusercontent.com/pyg-team/pyg_sphinx_theme/master/pyg_sphinx_theme/static/img/pyg_logo_text.svg?sanitize=true"></a>
+
+</div>
 
 **We introduce BioX-CPath, an interpretable graph neural network for multistain pathology that achieves state-of-the-art performance while providing biological insights through a novel stain-aware attention mechanism.**
 
-## Overview 
+### Key Features
 
-The development of biologically interpretable and explainable models remains a key challenge in computational pathology, particularly for multistain immunohistochemistry (IHC) analysis. We present BioX-CPath, an explainable graph neural network architecture for whole slide image (WSI) classification that leverages both spatial and semantic features across multiple stains. At its core, BioX-CPath introduces a novel Stain-Aware Attention Pooling (SAAP) module that generates biologically meaningful, stain-aware patient embeddings. Our approach achieves state-of-the-art performance on both Rheumatoid Arthritis and Sjogren's Disease multistain datasets. Beyond performance metrics, BioX-CPath provides interpretable insights through stain attention scores, entropy measures, and stain interaction scores, that permit measuring model alignment with known pathological mechanisms. This biological grounding, combined with strong classification performance, makes BioX-CPath particularly suitable for clinical applications where interpretability is key. 
+- **Stain-Aware Attention Pooling (SAAP)**: A novel module that generates biologically meaningful, stain-aware patient embeddings
+- **State-of-the-art performance**: Validated on Rheumatoid Arthritis and Sjogren's Disease multistain datasets
+- **Interpretable insights**: Provides stain attention scores, entropy measures, and stain interaction scores and GNN node heatmaps
+- **Biological alignment**: Model outputs can be measured against known pathological mechanisms
+- **Clinical applicability**: Combines strong classification performance with the interpretability needed for clinical settings
 
 ![](figures/pipeline_final.png)
 
