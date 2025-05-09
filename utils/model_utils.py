@@ -77,6 +77,7 @@ def process_model_output(args, output, loss_fn):
 
         raise ValueError(f"Unsupported model: {args.model_name}")
 
+
 def load_data(args, results_dir):
     config = get_model_config(args)
     run_settings = (
