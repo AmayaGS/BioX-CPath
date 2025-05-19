@@ -334,7 +334,7 @@ def create_embedding_graphs(embedding_net, loader, k, include_self, stain_types,
             # KNN dictionary
             num_samples = patient_embedding.shape[0]
             k_adjusted = min(k, num_samples - 1 if include_self else num_samples)
-            knn_adj = torch.tensor(kneighbors_graph(patient_embedding, k_adjusted, include_self=include_self).A, dtype=torch.float)
+            knn_adj = torch.tensor(kneighbors_graph(patient_embedding, k_adjusted, include_self=include_self).toarray(), dtype=torch.float)
             knn_edge_index = knn_adj.nonzero().t()
             knn_edge_attr = torch.full((knn_edge_index.size(1), 1), edge_types['KNN'], dtype=torch.long)
             knn_data = Data(x=patient_embedding, edge_index=knn_edge_index, edge_attr=knn_edge_attr, node_attr=node_attr)
