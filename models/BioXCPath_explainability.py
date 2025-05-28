@@ -330,7 +330,6 @@ class bioxcpath_pooling(torch.nn.Module):
             stain = data.node_attr[node_idx_mapping[node]].item()
             stain_scores[stain].append(score)
 
-        #stain_weights = {stain: torch.tensor(scores).sum() for stain, scores in stain_scores.items()}
 
         ## Total proportion of attention per stain for weight calculation
         total_attention = attention_scores.sum()
@@ -338,15 +337,6 @@ class bioxcpath_pooling(torch.nn.Module):
 
         ## Z-score per stain
         global_mean = attention_scores.mean()
-        # stain_z_scores = {
-        #     stain: (
-        #         0.0 if len(scores) <= 1 else  # Handle single-node stains
-        #         (torch.tensor(scores).mean() - global_mean) /
-        #         (torch.tensor(scores).std(unbiased=False) / (len(scores) ** 0.5) + 1e-10)
-        #     )
-        #     for stain, scores in stain_scores.items()
-        # }
-
         stain_z_scores = {stain: self.safe_z_score(scores, global_mean, attention_scores)
                           for stain, scores in stain_scores.items()}
 
@@ -371,7 +361,7 @@ class bioxcpath_pooling(torch.nn.Module):
 
             # Apply stain-level weight
             avg_pooled_features.append(avg_pooled_stain * stain_weight) # weight by total proportion for mean features
-            max_pooled_features.append(max_pooled_stain * stain_weight) # weight by z-score for significant features stain_z_scores[stain]
+            max_pooled_features.append(max_pooled_stain * stain_weight)
 
         # 5. Combine pooled features via concatenation
         mean_stain_pooled = torch.stack(avg_pooled_features).sum(dim=0)
